@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GarageHunt — New screens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=Caveat:wght@600;700&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #EDE3F5; color: #2B1B4D; font-family: 'Work Sans', sans-serif; padding: 40px 20px; }
+  .wrap { max-width: 1200px; margin: 0 auto; }
+  h1, h2 { font-family: 'Fredoka', sans-serif; font-weight: 600; }
+  .page-header { text-align: center; margin-bottom: 40px; }
+  .page-header .logo-row { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .mini-tag { width: 28px; height: 28px; background: #FFC53D; border-radius: 7px 7px 7px 2px; transform: rotate(-10deg); display: flex; align-items: center; justify-content: center; }
+  .mini-tag i { font-size: 15px; color: #2B1B4D; }
+  .page-header .logo-row span { font-size: 20px; font-weight: 700; }
+  .page-header p { font-family: 'Caveat', cursive; font-size: 18px; color: #7B5FD9; font-weight: 600; }
+
+  .phone-grid { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; }
+  .screen-block { width: 300px; }
+  .screen-name { font-family: 'Fredoka', sans-serif; font-size: 12px; font-weight: 600; color: #5B4A7A; margin-bottom: 8px; text-align: center; }
+  .phone { background: #FFF8E7; border-radius: 22px; padding: 10px; border: 3px solid #1A1030; min-height: 560px; }
+
+  /* Splash screen */
+  .splash-phone { background: #2B1B4D; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .splash-phone::before, .splash-phone::after { content: ''; position: absolute; border-radius: 50%; }
+  .splash-phone::before { width: 160px; height: 160px; background: #FF6B4A; opacity: 0.15; top: -50px; left: -40px; }
+  .splash-phone::after { width: 180px; height: 180px; background: #0F9D8B; opacity: 0.18; bottom: -60px; right: -40px; }
+  .splash-logo { width: 64px; height: 64px; background: #FFC53D; border-radius: 16px 16px 16px 4px; transform: rotate(-10deg); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; position: relative; z-index: 1; }
+  .splash-logo i { font-size: 32px; color: #2B1B4D; }
+  .splash-word { font-family: 'Fredoka', sans-serif; font-size: 26px; font-weight: 700; color: #FFF8E7; position: relative; z-index: 1; }
+  .splash-word span { color: #FFC53D; }
+  .splash-tag { font-family: 'Caveat', cursive; font-size: 16px; font-weight: 600; color: #FFC53D; margin-top: 6px; position: relative; z-index: 1; }
+  .splash-dots { display: flex; gap: 6px; margin-top: 28px; position: relative; z-index: 1; }
+  .splash-dots div { width: 6px; height: 6px; border-radius: 50%; background: #FFF8E7; opacity: 0.4; }
+  .splash-dots div:nth-child(1) { opacity: 1; }
+
+  /* shared */
+  .field-label { font-size: 10px; font-weight: 600; margin: 0 4px 5px; color: #5B4A7A; }
+  .field { display: flex; align-items: center; gap: 6px; background: white; border: 2px solid #F0DFC0; border-radius: 10px; padding: 0 9px; height: 32px; margin: 0 4px 8px; }
+  .field i { font-size: 12px; color: #8A7A9E; }
+  .field span { font-size: 11px; }
+  .field.locked { background: #F2ECDD; color: #A89A78; }
+  .field.locked span { color: #A89A78; }
+  .field-row { display: flex; gap: 6px; margin: 0 4px 4px; }
+  .field-row .field { flex: 1; margin: 0; }
+
+  .btn-primary { background: #FF6B4A; color: white; text-align: center; border-radius: 10px; padding: 10px; font-family: 'Fredoka'; font-size: 12px; font-weight: 600; }
+  .btn-secondary { background: white; border: 2px solid #F0DFC0; text-align: center; border-radius: 10px; padding: 9px; font-family: 'Fredoka'; font-size: 11px; font-weight: 600; color: #5B4A7A; }
+  .btn-full { width: calc(100% - 8px); margin: 8px 4px 0; }
+  .btn-dark { background: #1A1030; color: white; }
+  .btn-outline { background: white; border: 2px solid #2B1B4D; color: #2B1B4D; }
+
+  .chip-row { display: flex; gap: 5px; margin: 0 4px 10px; flex-wrap: wrap; }
+  .chip { font-family: 'Fredoka', sans-serif; font-size: 10px; font-weight: 600; padding: 5px 10px; border-radius: 999px; }
+  .chip-active { background: #FF6B4A; color: white; }
+  .chip-idle { background: white; border: 2px solid #F0DFC0; color: #8A5A00; }
+
+  .price-tag {
+    position: relative; display: inline-flex; align-items: center;
+    background: #FFF8E7; border: 1.5px solid #E0C88A;
+    padding: 4px 10px 4px 14px; border-radius: 2px;
+    font-family: 'Kalam', cursive; font-weight: 400; font-size: 10px; color: #2B1B4D;
+  }
+  .price-tag::before { content: ''; position: absolute; left: 4px; top: 50%; width: 4px; height: 4px; border-radius: 50%; background: #E0C88A; transform: translateY(-50%); }
+  .price-tag::after { content: ''; position: absolute; top: -6px; left: 6px; width: 24px; height: 9px; background: rgba(255,229,153,0.75); border: 1px solid rgba(180,150,60,0.35); transform: rotate(-6deg); }
+  .price-tag:nth-of-type(odd) { transform: rotate(-3deg); }
+  .price-tag:nth-of-type(even) { transform: rotate(2deg); }
+  .tag-live { border-color: rgba(15,157,139,0.4); }
+  .tag-live::before { background: rgba(15,157,139,0.5); }
+  .tag-live::after { background: rgba(15,157,139,0.25); border-color: rgba(15,157,139,0.35); }
+  .tag-draft { border-color: rgba(91,74,122,0.3); border-style: dashed; }
+  .tag-draft::before { background: rgba(91,74,122,0.4); }
+  .tag-draft::after { background: rgba(91,74,122,0.15); border-color: rgba(91,74,122,0.3); }
+  .tag-scheduled { border-color: rgba(35,64,122,0.3); }
+  .tag-scheduled::before { background: rgba(35,64,122,0.4); }
+  .tag-scheduled::after { background: rgba(35,64,122,0.15); border-color: rgba(35,64,122,0.3); }
+
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: #FFEFD1; display: flex; align-items: center; justify-content: center; font-family: 'Fredoka'; font-size: 10px; font-weight: 600; color: #8A5A00; flex-shrink: 0; }
+
+  .photo-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px; margin: 0 4px 10px; }
+  .photo-slot { aspect-ratio: 1; border-radius: 8px; background-size: cover; background-position: center; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .photo-slot.empty { background: white; border: 2px dashed #E7D9B8; }
+  .photo-slot.empty i { font-size: 14px; color: #C9B98A; }
+
+  /* Login */
+  .login-icon-btn { display: flex; align-items: center; justify-content: center; gap: 7px; border-radius: 10px; padding: 9px; font-family: 'Fredoka'; font-size: 11px; font-weight: 600; margin: 0 4px 7px; }
+  .divider { display: flex; align-items: center; gap: 8px; margin: 10px 4px 10px; }
+  .divider .line { flex: 1; height: 1px; background: #F0DFC0; }
+  .divider span { font-size: 10px; color: #B8A8CC; }
+
+  /* Profile */
+  .profile-header { display: flex; align-items: center; gap: 10px; padding: 4px 4px 12px; }
+  .profile-avatar { width: 44px; height: 44px; border-radius: 50%; background: #FFEFD1; display: flex; align-items: center; justify-content: center; font-family: 'Fredoka'; font-size: 15px; font-weight: 600; color: #8A5A00; flex-shrink: 0; }
+  .profile-name { font-family: 'Fredoka'; font-size: 14px; font-weight: 600; }
+  .profile-sub { font-size: 10px; color: #8A7A9E; margin-top: 1px; }
+  .section-title { font-size: 11px; font-weight: 600; margin: 12px 4px 8px; color: #5B4A7A; }
+  .sale-card-scroll { display: flex; gap: 8px; overflow-x: auto; padding: 0 4px 10px; }
+  .sale-card { width: 120px; flex-shrink: 0; background: white; border: 2px solid #F0DFC0; border-radius: 12px; overflow: hidden; }
+  .sale-card .thumb { width: 100%; height: 70px; background-size: cover; background-position: center; }
+  .sale-card .info { padding: 6px 7px; }
+  .sale-card .title { font-family: 'Fredoka'; font-size: 10px; font-weight: 600; margin: 3px 0 2px; }
+  .sale-card .sub { font-size: 9px; color: #8A7A9E; }
+
+  .nudge-card { background: #EDE3F5; border: 2px solid #C6B2E8; border-radius: 12px; padding: 10px; margin: 0 4px 10px; }
+  .nudge-avatars { display: flex; margin-bottom: 6px; }
+  .nudge-avatars .avatar { border: 2px solid #EDE3F5; margin-left: -8px; }
+  .nudge-avatars .avatar:first-child { margin-left: 0; }
+  .nudge-title { font-family: 'Fredoka'; font-size: 12px; font-weight: 600; margin-bottom: 3px; }
+  .nudge-sub { font-size: 10px; color: #5B4A7A; margin-bottom: 8px; line-height: 1.5; }
+
+  .shortcut-row { display: flex; align-items: center; gap: 10px; background: white; border: 2px solid #F0DFC0; border-radius: 10px; padding: 10px; margin: 0 4px 6px; }
+  .shortcut-row i.leading { font-size: 15px; color: #7B5FD9; }
+  .shortcut-row span { flex: 1; font-family: 'Fredoka'; font-size: 11px; font-weight: 600; }
+  .shortcut-row i.chev { font-size: 13px; color: #C9B98A; }
+
+  .note-text { font-size: 10px; color: #8A7A9E; margin: 0 4px 8px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="page-header">
+    <div class="logo-row"><div class="mini-tag"><i class="ti ti-map-pin-filled"></i></div><span>GarageHunt</span></div>
+    <p>the screens we were missing</p>
+  </div>
+
+  <div class="phone-grid">
+
+    <div class="screen-block">
+      <div class="screen-name">Splash / launch screen</div>
+      <div class="phone splash-phone">
+        <div class="splash-logo"><i class="ti ti-map-pin-filled"></i></div>
+        <div class="splash-word">Garage<span>Hunt</span></div>
+        <div class="splash-tag">finding your next find...</div>
+        <div class="splash-dots"><div></div><div></div><div></div></div>
+      </div>
+    </div>
+
+    <div class="screen-block">
+      <div class="screen-name">Login</div>
+      <div class="phone">
+        <div style="text-align:center; padding: 20px 4px 6px;">
+          <div class="mini-tag" style="margin: 0 auto 10px;"><i class="ti ti-map-pin-filled"></i></div>
+          <div style="font-family:'Fredoka'; font-size:17px; font-weight:600;">Welcome back</div>
+          <div style="font-size:11px; color:#8A7A9E; margin-top:3px;">Sign in to find this weekend's best sales</div>
+        </div>
+        <div style="padding: 14px 0 0;">
+          <div class="login-icon-btn btn-dark"><i class="ti ti-brand-apple"></i>Continue with Apple</div>
+          <div class="login-icon-btn btn-outline"><i class="ti ti-brand-google" style="color:#FF6B4A;"></i>Continue with Google</div>
+          <div class="divider"><div class="line"></div><span>or continue with email</span><div class="line"></div></div>
+          <div class="field"><i class="ti ti-mail"></i><span style="color:#B8A8CC;">Email address</span></div>
+          <div class="field"><i class="ti ti-lock"></i><span style="color:#B8A8CC;">Password</span></div>
+          <div style="text-align:right; margin: 0 4px 10px;"><span style="font-size:10px; color:#7B5FD9; font-weight:600;">Forgot password?</span></div>
+          <div class="btn-primary btn-full">Sign in</div>
+          <div style="text-align:center; margin: 14px 4px 0; font-size:11px; color:#8A7A9E;">Don't have an account? <span style="color:#FF6B4A; font-weight:600;">Sign up</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="screen-block">
+      <div class="screen-name">Profile</div>
+      <div class="phone">
+        <div class="profile-header">
+          <div class="profile-avatar">AB</div>
+          <div style="flex:1;">
+            <div class="profile-name">Adam B.</div>
+            <div class="profile-sub"><i class="ti ti-map-pin" style="font-size:9px;"></i> London, ON &middot; Member since 2026</div>
+          </div>
+          <i class="ti ti-settings" style="font-size:16px; color:#8A7A9E;"></i>
+        </div>
+
+        <div class="nudge-card">
+          <div class="nudge-avatars"><div class="avatar">RP</div><div class="avatar">SL</div></div>
+          <div class="nudge-title">2 neighbors are planning sales nearby</div>
+          <div class="nudge-sub">Team up for the same weekend and everyone gets more traffic.</div>
+          <div class="btn-primary" style="display:inline-block; padding: 7px 12px; font-size:10px;">See who's selling nearby</div>
+        </div>
+
+        <div class="section-title">My sales</div>
+        <div class="sale-card-scroll">
+          <div class="sale-card">
+            <div class="thumb" style="background-image:url('https://picsum.photos/seed/garagehunt-sale1/200/140');"></div>
+            <div class="info"><span class="price-tag tag-live" style="font-size:8px; padding:2px 6px 2px 9px;">Live</span><div class="title">Maple St. sale</div><div class="sub">Today &middot; 9am</div></div>
+          </div>
+          <div class="sale-card">
+            <div class="thumb" style="background-image:url('https://picsum.photos/seed/garagehunt-sale2/200/140');"></div>
+            <div class="info"><span class="price-tag tag-scheduled" style="font-size:8px; padding:2px 6px 2px 9px;">Sat Jul 18</span><div class="title">Tool sale</div><div class="sub">Scheduled</div></div>
+          </div>
+          <div class="sale-card">
+            <div class="thumb" style="background: #F2ECDD; display:flex; align-items:center; justify-content:center;"><i class="ti ti-plus" style="color:#C9B98A; font-size:18px;"></i></div>
+            <div class="info"><div class="title" style="color:#FF6B4A;">Plan a sale</div><div class="sub">Draft ahead</div></div>
+          </div>
+        </div>
+
+        <div class="section-title">Shortcuts</div>
+        <div class="shortcut-row"><i class="ti ti-list-details leading"></i><span>My listings</span><i class="ti ti-chevron-right chev"></i></div>
+        <div class="shortcut-row"><i class="ti ti-target-arrow leading"></i><span>Saved searches</span><i class="ti ti-chevron-right chev"></i></div>
+        <div class="shortcut-row"><i class="ti ti-shield-check leading"></i><span>Become an organizer</span><i class="ti ti-chevron-right chev"></i></div>
+      </div>
+    </div>
+
+    <div class="screen-block">
+      <div class="screen-name">Edit listing</div>
+      <div class="phone">
+        <div style="display:flex; align-items:center; gap:8px; padding:3px 4px 8px;"><i class="ti ti-chevron-left" style="font-size:17px;"></i><span style="font-family:'Fredoka'; font-size:13px; font-weight:600;">Edit listing</span></div>
+
+        <div class="field-label">Photos</div>
+        <div class="photo-grid">
+          <div class="photo-slot" style="background-image:url('https://picsum.photos/seed/garagehunt-edit1/150/150');"></div>
+          <div class="photo-slot" style="background-image:url('https://picsum.photos/seed/garagehunt-edit2/150/150');"></div>
+          <div class="photo-slot" style="background-image:url('https://picsum.photos/seed/garagehunt-edit3/150/150');"></div>
+          <div class="photo-slot empty"><i class="ti ti-plus"></i></div>
+        </div>
+
+        <div class="field-label">Sale dates</div>
+        <div class="field-row">
+          <div class="field"><i class="ti ti-calendar"></i><span>Sat, Jul 11</span></div>
+          <div class="field"><i class="ti ti-calendar"></i><span>Sun, Jul 12</span></div>
+        </div>
+        <div class="note-text" style="margin: 0 4px 10px;">Extend or shorten your dates anytime while the sale is scheduled or live.</div>
+
+        <div class="field-label">Address</div>
+        <div class="field locked"><i class="ti ti-lock"></i><span>42 Maple Street, London</span></div>
+        <div class="note-text">Address is locked after publishing. Need to fix an error? Contact support.</div>
+
+        <div class="field-label">Categories</div>
+        <div class="chip-row"><span class="chip chip-active">Furniture</span><span class="chip chip-idle">Kids</span><span class="chip chip-active">Tools</span></div>
+
+        <div class="field-label">Description</div>
+        <div class="field" style="height:52px; align-items:flex-start; padding-top:6px;"><span style="font-size:10px; line-height:1.4;">Day 1 update: dining table sold! Still have the tool set and kids' bikes.</span></div>
+
+        <div class="btn-primary btn-full">Save changes</div>
+        <div style="text-align:center; margin-top:10px;"><span style="font-size:10px; color:#C9857A;">Cancel this sale</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

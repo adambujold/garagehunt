@@ -1,0 +1,961 @@
+import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
+import { useState } from 'react';
+import {
+  ActivityIndicator,
+  Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableWithoutFeedback,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { Chip } from '@/components/garagehunt/chip';
+import { OtherCategoryField } from '@/components/garagehunt/other-category-field';
+import { PhotoSourceSheet } from '@/components/garagehunt/photo-source-sheet';
+import { ToggleSwitch } from '@/components/garagehunt/toggle-switch';
+import { Colors, Fonts } from '@/constants/brand';
+import { CATEGORIES } from '@/constants/categories';
+import { DEFAULT_MAP_REGION } from '@/constants/map';
+import { useAuthSession } from '@/hooks/use-auth-session';
+import { useCurrentLocation } from '@/hooks/use-current-location';
+import { getErrorMessage } from '@/utils/get-error-message';
+import { MAX_LISTING_PHOTOS, uploadListingPhoto } from '@/utils/listing-photos';
+import { parseDisplayDate, parseDisplayTimeRange } from '@/utils/parse-sale-form-input';
+import { pickListingPhoto, takeListingPhoto } from '@/utils/pick-listing-photo';
+import { createSaleListing } from '@/utils/sale-listings';
+
+const TOTAL_STEPS = 4;
+
+type JoinEventStatus = 'undecided' | 'requested' | 'declined';
+
+export default function ListSaleScreen() {
+  const { session } = useAuthSession();
+  const { coords } = useCurrentLocation();
+  const [step, setStep] = useState(1);
+  const [published, setPublished] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+
+  const [address, setAddress] = useState('42 Maple Street, London');
+  // Mirrors sale_listings.start_date/end_date — equal values represent a
+  // single-day sale, per the feature spec (Section 3, step 3).
+  const [startDate, setStartDate] = useState('Sat, Jul 11');
+  const [endDate, setEndDate] = useState('Sat, Jul 11');
+  const [time, setTime] = useState('9am–2pm');
+  const [showExactAddress, setShowExactAddress] = useState(false);
+
+  // Local URIs only — the listing doesn't exist in the DB yet at this point
+  // in the wizard, so actual Storage upload + listing_photos rows happen at
+  // publish/save-draft time once a real listing id exists (see
+  // uploadPendingPhotos below). Edit Listing, by contrast, already has a
+  // real id and uploads immediately on pick.
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [pickingPhoto, setPickingPhoto] = useState(false);
+  const [photoSourceSheetVisible, setPhotoSourceSheetVisible] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [categories, setCategories] = useState<string[]>(['Furniture']);
+  const [description, setDescription] = useState('');
+  // Mirrors sale_listings.other_items — a discrete tag list, not appended
+  // into description, per the technical architecture doc.
+  const [otherItems, setOtherItems] = useState<string[]>([]);
+
+  const [joinEventStatus, setJoinEventStatus] = useState<JoinEventStatus>('undecided');
+
+  const toggleCategory = (category: string) => {
+    setCategories((current) => {
+      const isActive = current.includes(category);
+      if (isActive && category === 'Other') {
+        setOtherItems([]);
+      }
+      return isActive ? current.filter((c) => c !== category) : [...current, category];
+    });
+  };
+
+  const addOtherItem = (item: string) => {
+    setOtherItems((current) => [...current, item]);
+  };
+
+  const removeOtherItem = (index: number) => {
+    setOtherItems((current) => current.filter((_, i) => i !== index));
+  };
+
+  const handleAddPhoto = () => {
+    if (photos.length >= MAX_LISTING_PHOTOS || pickingPhoto) return;
+    setPhotoError(null);
+    setPhotoSourceSheetVisible(true);
+  };
+
+  const runPhotoPicker = async (picker: () => Promise<string | null>) => {
+    setPhotoSourceSheetVisible(false);
+    setPickingPhoto(true);
+    try {
+      const uri = await picker();
+      if (uri) setPhotos((current) => [...current, uri]);
+    } catch (err) {
+      console.error('Failed to pick a photo', err);
+      setPhotoError(getErrorMessage(err, 'Could not access your photos.'));
+    } finally {
+      setPickingPhoto(false);
+    }
+  };
+
+  const handleRemovePhoto = (index: number) => {
+    setPhotos((current) => current.filter((_, i) => i !== index));
+  };
+
+  // Uploads whatever's in `photos` (local URIs) to a listing that now has a
+  // real id, in picked order. Runs after the listing row itself is created,
+  // for both Publish and Save-draft.
+  const uploadPendingPhotos = async (listingId: string) => {
+    for (let i = 0; i < photos.length; i++) {
+      await uploadListingPhoto(listingId, photos[i], i);
+    }
+  };
+
+  const resetForm = () => {
+    setStep(1);
+    setPublished(false);
+    setDraftSaved(false);
+    setPublishError(null);
+    setAddress('42 Maple Street, London');
+    setStartDate('Sat, Jul 11');
+    setEndDate('Sat, Jul 11');
+    setTime('9am–2pm');
+    setShowExactAddress(false);
+    setPhotos([]);
+    setPhotoError(null);
+    setCategories(['Furniture']);
+    setDescription('');
+    setOtherItems([]);
+    setJoinEventStatus('undecided');
+  };
+
+  const handlePublish = async () => {
+    if (!session) {
+      setPublishError('You need to be signed in to publish a sale.');
+      return;
+    }
+    setPublishError(null);
+    setPublishing(true);
+    try {
+      const startDateIso = parseDisplayDate(startDate);
+      const endDateIso = parseDisplayDate(endDate);
+      const { startTime, endTime } = parseDisplayTimeRange(time);
+      const origin = coords ?? {
+        latitude: DEFAULT_MAP_REGION.latitude,
+        longitude: DEFAULT_MAP_REGION.longitude,
+      };
+
+      const listingId = await createSaleListing({
+        sellerId: session.user.id,
+        latitude: origin.latitude,
+        longitude: origin.longitude,
+        addressText: address,
+        immediateRevealOptIn: showExactAddress,
+        startDate: startDateIso,
+        endDate: endDateIso,
+        dailyStartTime: startTime,
+        dailyEndTime: endTime,
+        description,
+        otherItems,
+        categoryNames: categories,
+        status: 'published',
+      });
+      await uploadPendingPhotos(listingId);
+
+      setPublished(true);
+    } catch (err) {
+      console.error('Failed to publish sale', err);
+      setPublishError(getErrorMessage(err, 'Something went wrong publishing your sale.'));
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  // A draft doesn't need every field filled in yet — but sale_listings still
+  // has NOT NULL date/time columns, so this reuses whatever's currently in
+  // the form (including the untouched defaults) rather than requiring the
+  // user to reach the review step first.
+  const handleSaveDraft = async () => {
+    if (!session) {
+      setPublishError('You need to be signed in to save a draft.');
+      return;
+    }
+    setPublishError(null);
+    setSavingDraft(true);
+    try {
+      const startDateIso = parseDisplayDate(startDate);
+      const endDateIso = parseDisplayDate(endDate);
+      const { startTime, endTime } = parseDisplayTimeRange(time);
+      const origin = coords ?? {
+        latitude: DEFAULT_MAP_REGION.latitude,
+        longitude: DEFAULT_MAP_REGION.longitude,
+      };
+
+      const listingId = await createSaleListing({
+        sellerId: session.user.id,
+        latitude: origin.latitude,
+        longitude: origin.longitude,
+        addressText: address,
+        immediateRevealOptIn: showExactAddress,
+        startDate: startDateIso,
+        endDate: endDateIso,
+        dailyStartTime: startTime,
+        dailyEndTime: endTime,
+        description,
+        otherItems,
+        categoryNames: categories,
+        status: 'draft',
+      });
+      await uploadPendingPhotos(listingId);
+
+      setDraftSaved(true);
+    } catch (err) {
+      console.error('Failed to save draft', err);
+      setPublishError(getErrorMessage(err, 'Something went wrong saving your draft.'));
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const handleContinue = () => {
+    if (step < TOTAL_STEPS) {
+      setStep(step + 1);
+    } else {
+      handlePublish();
+    }
+  };
+
+  const handleBack = () => {
+    if (step > 1) {
+      setStep(step - 1);
+    }
+  };
+
+  const dateRangeLabel = startDate === endDate ? startDate : `${startDate} – ${endDate}`;
+
+  if (published) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.successBody}>
+          <View style={styles.successIcon}>
+            <Ionicons name="checkmark" size={30} color="#fff" />
+          </View>
+          <Text style={styles.successTitle}>Your sale is live!</Text>
+          <Text style={styles.successSubtitle}>
+            {address} &middot; {dateRangeLabel} &middot; {time}
+          </Text>
+          <Pressable style={styles.shareButton}>
+            <Ionicons name="share-outline" size={14} color={Colors.mutedDark} />
+            <Text style={styles.shareButtonLabel}>Share to social</Text>
+          </Pressable>
+          <Pressable
+            style={styles.doneButton}
+            onPress={() => {
+              resetForm();
+              router.replace('/');
+            }}>
+            <Text style={styles.doneButtonLabel}>Done</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (draftSaved) {
+    return (
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <View style={styles.successBody}>
+          <View style={[styles.successIcon, styles.draftSuccessIcon]}>
+            <Ionicons name="document-text-outline" size={28} color="#fff" />
+          </View>
+          <Text style={styles.successTitle}>Saved as draft</Text>
+          <Text style={styles.successSubtitle}>
+            Finish it up anytime from My Listings — it won&apos;t show on Discover until you publish.
+          </Text>
+          <Pressable
+            style={styles.doneButton}
+            onPress={() => {
+              resetForm();
+              router.replace('/my-listings');
+            }}>
+            <Text style={styles.doneButtonLabel}>Go to My Listings</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.header}>
+        <Text style={styles.title}>List a sale</Text>
+      </View>
+
+      <View style={styles.progressRow}>
+        {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+          <View key={i} style={[styles.progressDot, i < step && styles.progressDotOn]} />
+        ))}
+      </View>
+
+      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <ScrollView
+        style={styles.flexFill}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled">
+        {step === 1 && (
+          <>
+            <Text style={styles.fieldLabel}>Address</Text>
+            <View style={styles.field}>
+              <Ionicons name="location-outline" size={14} color={Colors.muted} />
+              <TextInput
+                value={address}
+                onChangeText={setAddress}
+                style={styles.fieldInput}
+                placeholder="Street address"
+                placeholderTextColor={Colors.mutedLight}
+              />
+            </View>
+
+            <View style={styles.miniMap}>
+              <Ionicons name="location" size={22} color={Colors.coral} />
+            </View>
+
+            <Text style={styles.fieldLabel}>Date range</Text>
+            <View style={styles.fieldRow}>
+              <View style={[styles.field, styles.fieldRowItem]}>
+                <Ionicons name="calendar-outline" size={14} color={Colors.muted} />
+                <TextInput value={startDate} onChangeText={setStartDate} style={styles.fieldInput} />
+              </View>
+              <View style={[styles.field, styles.fieldRowItem]}>
+                <Ionicons name="calendar-outline" size={14} color={Colors.muted} />
+                <TextInput value={endDate} onChangeText={setEndDate} style={styles.fieldInput} />
+              </View>
+            </View>
+            <Text style={styles.fieldHint}>
+              Single-day sale? Leave the end date the same as the start date.
+            </Text>
+
+            <Text style={styles.fieldLabel}>Daily time window</Text>
+            <View style={styles.field}>
+              <Ionicons name="time-outline" size={14} color={Colors.muted} />
+              <TextInput value={time} onChangeText={setTime} style={styles.fieldInput} />
+            </View>
+
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleTextGroup}>
+                <Text style={styles.toggleLabel}>Show exact address now</Text>
+                <Text style={styles.toggleDescription}>Off by default</Text>
+              </View>
+              <ToggleSwitch value={showExactAddress} onValueChange={setShowExactAddress} />
+            </View>
+
+            {showExactAddress && (
+              <View style={styles.warningBanner}>
+                <Ionicons name="warning-outline" size={13} color={Colors.amberText} />
+                <Text style={styles.warningBannerText}>
+                  Your exact address will be visible to all app users immediately. We recommend
+                  waiting until the day of your sale for privacy and safety.
+                </Text>
+              </View>
+            )}
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <Text style={styles.fieldLabel}>
+              Photos ({photos.length}/{MAX_LISTING_PHOTOS})
+            </Text>
+            <View style={styles.photoGrid}>
+              {photos.map((uri, index) => (
+                <View key={uri} style={styles.photoSlot}>
+                  <Image source={{ uri }} style={styles.photoImage} resizeMode="cover" />
+                  <Pressable style={styles.photoRemoveButton} onPress={() => handleRemovePhoto(index)} hitSlop={6}>
+                    <Ionicons name="close" size={12} color="#fff" />
+                  </Pressable>
+                </View>
+              ))}
+              {photos.length < MAX_LISTING_PHOTOS && (
+                <Pressable
+                  style={[styles.photoSlot, styles.photoSlotEmpty]}
+                  onPress={handleAddPhoto}
+                  disabled={pickingPhoto}>
+                  {pickingPhoto ? (
+                    <ActivityIndicator size="small" color={Colors.mutedLight} />
+                  ) : (
+                    <Ionicons name="camera-outline" size={18} color={Colors.mutedLight} />
+                  )}
+                </Pressable>
+              )}
+            </View>
+            {photoError && (
+              <View style={styles.warningBanner}>
+                <Ionicons name="warning-outline" size={13} color={Colors.amberText} />
+                <Text style={styles.warningBannerText}>{photoError}</Text>
+              </View>
+            )}
+
+            <Text style={styles.fieldLabel}>Categories</Text>
+            <View style={styles.chipRow}>
+              {CATEGORIES.map((category) => (
+                <Chip
+                  key={category}
+                  label={category}
+                  active={categories.includes(category)}
+                  onPress={() => toggleCategory(category)}
+                />
+              ))}
+            </View>
+
+            {categories.includes('Other') && (
+              <OtherCategoryField
+                label="What else are you bringing?"
+                placeholder="Type and press return..."
+                items={otherItems}
+                onAddItem={addOtherItem}
+                onRemoveItem={removeOtherItem}
+              />
+            )}
+
+            <Text style={styles.fieldLabel}>Description</Text>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Moving sale, everything must go..."
+              placeholderTextColor={Colors.mutedLight}
+              style={styles.descriptionInput}
+              multiline
+            />
+          </>
+        )}
+
+        {step === 3 && (
+          <>
+            <Text style={styles.fieldLabel}>A town-wide event is happening near you</Text>
+            <View style={styles.reviewCard}>
+              <View style={styles.eventRow}>
+                <View style={styles.eventAvatar}>
+                  <Ionicons name="people-outline" size={16} color={Colors.violet} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.eventTitle}>Riverdale community sale</Text>
+                  <Text style={styles.eventSubtitle}>Sat, Jul 11 &middot; 42 homes</Text>
+                </View>
+              </View>
+
+              {joinEventStatus === 'undecided' ? (
+                <View style={styles.buttonRow}>
+                  <Pressable
+                    style={styles.secondaryButton}
+                    onPress={() => setJoinEventStatus('declined')}>
+                    <Text style={styles.secondaryButtonLabel}>Not this time</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.primaryButton}
+                    onPress={() => setJoinEventStatus('requested')}>
+                    <Text style={styles.primaryButtonLabel}>Request to join</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.eventStatusBanner}>
+                  <Ionicons
+                    name={joinEventStatus === 'requested' ? 'checkmark-circle' : 'close-circle'}
+                    size={14}
+                    color={joinEventStatus === 'requested' ? '#0F6E56' : Colors.muted}
+                  />
+                  <Text style={styles.eventStatusText}>
+                    {joinEventStatus === 'requested'
+                      ? 'Request sent to the organizer'
+                      : "You'll list independently"}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </>
+        )}
+
+        {step === 4 && (
+          <>
+            <Text style={styles.fieldLabel}>Review your listing</Text>
+            <View style={styles.reviewCard}>
+              {photos.length > 0 && (
+                <View style={styles.photoGrid}>
+                  {photos.map((uri) => (
+                    <Image key={uri} source={{ uri }} style={[styles.photoSlot, styles.photoImage]} resizeMode="cover" />
+                  ))}
+                </View>
+              )}
+              <View style={styles.reviewInfoRow}>
+                <Ionicons name="location-outline" size={12} color={Colors.muted} />
+                <Text style={styles.reviewInfoText}>
+                  {showExactAddress ? address : 'Maple Street area, London'}
+                </Text>
+              </View>
+              <View style={styles.reviewInfoRow}>
+                <Ionicons name="calendar-outline" size={12} color={Colors.muted} />
+                <Text style={styles.reviewInfoText}>
+                  {dateRangeLabel} &middot; {time}
+                </Text>
+              </View>
+              <View style={styles.chipRow}>
+                {categories.length > 0 ? (
+                  categories.map((category) => (
+                    <View key={category} style={styles.categoryChip}>
+                      <Text style={styles.categoryChipLabel}>{category}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.reviewInfoText}>No categories selected</Text>
+                )}
+              </View>
+              {otherItems.length > 0 && (
+                <Text style={styles.reviewInfoText}>Also bringing: {otherItems.join(', ')}</Text>
+              )}
+              {description.length > 0 && (
+                <Text style={styles.reviewDescription}>{description}</Text>
+              )}
+              <Text style={styles.reviewMeta}>
+                {photos.length} photo{photos.length === 1 ? '' : 's'} &middot;{' '}
+                {joinEventStatus === 'requested' ? 'Joining Riverdale event' : 'Independent listing'}
+              </Text>
+            </View>
+          </>
+        )}
+
+        {publishError && (
+          <View style={styles.warningBanner}>
+            <Ionicons name="warning-outline" size={13} color={Colors.amberText} />
+            <Text style={styles.warningBannerText}>{publishError}</Text>
+          </View>
+        )}
+      </ScrollView>
+      </TouchableWithoutFeedback>
+
+      <Pressable
+        style={styles.draftLink}
+        onPress={handleSaveDraft}
+        disabled={publishing || savingDraft}>
+        {savingDraft ? (
+          <ActivityIndicator size="small" color={Colors.mutedDark} />
+        ) : (
+          <Text style={styles.draftLinkLabel}>Save as draft</Text>
+        )}
+      </Pressable>
+
+      <View style={styles.buttonRow}>
+        {step > 1 && (
+          <Pressable style={styles.secondaryButton} onPress={handleBack} disabled={publishing || savingDraft}>
+            <Text style={styles.secondaryButtonLabel}>Back</Text>
+          </Pressable>
+        )}
+        <Pressable
+          style={[styles.primaryButton, step === 1 && styles.primaryButtonFull]}
+          onPress={handleContinue}
+          disabled={publishing || savingDraft}>
+          {publishing ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.primaryButtonLabel}>{step < TOTAL_STEPS ? 'Continue' : 'Publish sale'}</Text>
+          )}
+        </Pressable>
+      </View>
+      </KeyboardAvoidingView>
+
+      <PhotoSourceSheet
+        visible={photoSourceSheetVisible}
+        onTakePhoto={() => runPhotoPicker(takeListingPhoto)}
+        onChooseFromLibrary={() => runPhotoPicker(pickListingPhoto)}
+        onCancel={() => setPhotoSourceSheetVisible(false)}
+      />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: Colors.lavender,
+  },
+  flexFill: {
+    flex: 1,
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  title: {
+    fontFamily: Fonts.displaySemiBold,
+    fontSize: 20,
+    color: Colors.ink,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 6,
+  },
+  progressDot: {
+    flex: 1,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: Colors.tan,
+  },
+  progressDotOn: {
+    backgroundColor: Colors.coral,
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    // Generous bottom padding (not just 24) so fields near the end of the
+    // form — the description textarea in particular — have enough scroll
+    // headroom to be pulled fully above the keyboard; with too little
+    // trailing content, the ScrollView hits its max scroll offset before
+    // the focused field clears the keyboard.
+    paddingBottom: 220,
+  },
+  fieldLabel: {
+    fontFamily: Fonts.bodySemiBold,
+    fontSize: 12,
+    color: Colors.mutedDark,
+    marginBottom: 6,
+  },
+  field: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: Colors.tan,
+    borderRadius: 12,
+    height: 44,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+  },
+  fieldInput: {
+    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    color: Colors.ink,
+  },
+  fieldRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  fieldRowItem: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  fieldHint: {
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    color: Colors.muted,
+    marginTop: -6,
+    marginBottom: 14,
+  },
+  miniMap: {
+    height: 90,
+    borderRadius: 14,
+    backgroundColor: Colors.lavender,
+    borderWidth: 2,
+    borderColor: Colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.amberBg,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+  },
+  toggleTextGroup: {
+    flex: 1,
+    marginRight: 12,
+  },
+  toggleLabel: {
+    fontFamily: Fonts.bodySemiBold,
+    fontSize: 13,
+    color: Colors.ink,
+  },
+  toggleDescription: {
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    color: Colors.amberText,
+    marginTop: 2,
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    gap: 8,
+    backgroundColor: Colors.amberBg,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8,
+  },
+  warningBannerText: {
+    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    color: Colors.amberText,
+    lineHeight: 16,
+  },
+  photoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  photoSlot: {
+    width: '22%',
+    aspectRatio: 1,
+    borderRadius: 10,
+    backgroundColor: Colors.amberBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  photoSlotEmpty: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: Colors.tan,
+    borderStyle: 'dashed',
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoRemoveButton: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 14,
+  },
+  descriptionInput: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: Colors.tan,
+    borderRadius: 12,
+    padding: 12,
+    minHeight: 80,
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    color: Colors.ink,
+    textAlignVertical: 'top',
+  },
+  reviewCard: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: Colors.tan,
+    borderRadius: 14,
+    padding: 14,
+  },
+  eventRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  eventAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: Colors.lavender,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eventTitle: {
+    fontFamily: Fonts.displaySemiBold,
+    fontSize: 13,
+    color: Colors.ink,
+  },
+  eventSubtitle: {
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    color: Colors.muted,
+  },
+  eventStatusBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.lavender,
+    borderRadius: 10,
+    padding: 10,
+  },
+  eventStatusText: {
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    color: Colors.mutedDark,
+  },
+  reviewInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  reviewInfoText: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    color: Colors.mutedDark,
+  },
+  categoryChip: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: Colors.tan,
+    borderRadius: 999,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+  categoryChipLabel: {
+    fontFamily: Fonts.displayMedium,
+    fontSize: 10,
+    color: Colors.amberText,
+  },
+  reviewDescription: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    color: Colors.mutedDark,
+    lineHeight: 18,
+    borderTopWidth: 1,
+    borderTopColor: Colors.tan,
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  reviewMeta: {
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    color: Colors.muted,
+    marginTop: 8,
+  },
+  draftLink: {
+    alignItems: 'center',
+    paddingTop: 4,
+  },
+  draftLinkLabel: {
+    fontFamily: Fonts.bodySemiBold,
+    fontSize: 12,
+    color: Colors.mutedDark,
+    textDecorationLine: 'underline',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 16,
+  },
+  secondaryButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: Colors.tan,
+    borderRadius: 12,
+    paddingVertical: 13,
+  },
+  secondaryButtonLabel: {
+    fontFamily: Fonts.displaySemiBold,
+    fontSize: 12,
+    color: Colors.mutedDark,
+  },
+  primaryButton: {
+    flex: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.coral,
+    borderRadius: 12,
+    paddingVertical: 13,
+  },
+  primaryButtonFull: {
+    flex: 1,
+  },
+  primaryButtonLabel: {
+    fontFamily: Fonts.displaySemiBold,
+    fontSize: 12,
+    color: '#fff',
+  },
+  successBody: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  successIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.jade,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  draftSuccessIcon: {
+    backgroundColor: Colors.mutedDark,
+  },
+  successTitle: {
+    fontFamily: Fonts.displaySemiBold,
+    fontSize: 19,
+    color: Colors.ink,
+    marginBottom: 6,
+  },
+  successSubtitle: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    color: Colors.muted,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: Colors.tan,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+  },
+  shareButtonLabel: {
+    fontFamily: Fonts.displaySemiBold,
+    fontSize: 12,
+    color: Colors.mutedDark,
+  },
+  doneButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  doneButtonLabel: {
+    fontFamily: Fonts.displaySemiBold,
+    fontSize: 12,
+    color: Colors.coral,
+  },
+});

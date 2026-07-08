@@ -38,6 +38,20 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow GarageHunt to use your location to center the map on nearby garage sales."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow GarageHunt to access your photos so you can add them to your sale listing.",
+          "cameraPermission": "Allow GarageHunt to use your camera so you can take photos of items for your sale listing.",
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GarageHunt — Hot listing badge, fixed</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #EDE3F5; color: #2B1B4D; font-family: 'Work Sans', sans-serif; padding: 40px 20px; }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .page-header { text-align: center; margin-bottom: 36px; }
+  .page-header h1 { font-family: 'Fredoka'; font-size: 20px; font-weight: 600; }
+  .page-header p { font-size: 13px; color: #5B4A7A; margin-top: 4px; }
+
+  .price-tag {
+    position: relative; display: inline-flex; align-items: center;
+    background: #FFF8E7; border: 1.5px solid #E0C88A;
+    padding: 4px 10px 4px 14px; border-radius: 2px;
+    font-family: 'Kalam', cursive; font-weight: 400; font-size: 12px; color: #2B1B4D;
+  }
+  .price-tag::before { content: ''; position: absolute; left: 4px; top: 50%; width: 4px; height: 4px; border-radius: 50%; background: #E0C88A; transform: translateY(-50%); }
+  .price-tag::after { content: ''; position: absolute; top: -6px; left: 6px; width: 24px; height: 9px; background: rgba(255,229,153,0.75); border: 1px solid rgba(180,150,60,0.35); transform: rotate(-6deg); }
+
+  .tag-live { border-color: rgba(15,157,139,0.4); }
+  .tag-live::before { background: rgba(15,157,139,0.5); }
+  .tag-live::after { background: rgba(15,157,139,0.25); border-color: rgba(15,157,139,0.35); }
+
+  .tag-hot { border-color: rgba(224,90,30,0.5); transform: rotate(-3deg); }
+  .tag-hot::before { background: rgba(224,90,30,0.55); }
+  .tag-hot::after { background: rgba(255,138,61,0.3); border-color: rgba(224,90,30,0.4); }
+
+  .row-label { font-family: 'Fredoka'; font-size: 12px; font-weight: 600; color: #5B4A7A; margin: 0 0 12px; text-align: center; }
+  .compare-row { display: flex; gap: 24px; justify-content: center; margin-bottom: 40px; flex-wrap: wrap; }
+  .card { width: 280px; background: white; border: 2px solid #F0DFC0; border-radius: 12px; padding: 10px; display: flex; gap: 10px; position: relative; }
+  .thumb { width: 52px; height: 52px; border-radius: 10px; background: #FFEFD1; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .thumb i { font-size: 20px; color: #C98A00; }
+  .card-title { font-family: 'Fredoka'; font-size: 13px; font-weight: 600; margin: 0 0 2px; }
+  .card-sub { font-size: 11px; color: #8A7A9E; margin-bottom: 6px; }
+  .interest-line { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #D4537E; font-weight: 500; }
+
+  .note { font-size: 12px; color: #5B4A7A; line-height: 1.7; max-width: 600px; margin: 0 auto; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="page-header">
+    <h1>Hot listing — matching the tape-tag system</h1>
+    <p>Same structure as every other badge: paper, punched hole, tape strip, handwritten ink</p>
+  </div>
+
+  <div class="row-label">Below threshold vs. above threshold</div>
+  <div class="compare-row">
+
+    <div class="card">
+      <div class="thumb"><i class="ti ti-photo"></i></div>
+      <div>
+        <div class="card-title">Oakwood family sale</div>
+        <div class="card-sub">2.4km &middot; Sat, 9am&ndash;2pm</div>
+        <div class="interest-line"><i class="ti ti-heart" style="font-size:12px;"></i> 6 people interested</div>
+      </div>
+    </div>
+
+    <div class="card" style="padding-top: 18px;">
+      <div class="price-tag tag-hot" style="position:absolute; top:-9px; left:10px;">🔥 Hot listing</div>
+      <div class="thumb"><i class="ti ti-photo"></i></div>
+      <div>
+        <div class="card-title">Riverdale community sale</div>
+        <div class="card-sub">1.8km &middot; Sat, 9am&ndash;2pm</div>
+        <div class="interest-line"><i class="ti ti-heart-filled" style="font-size:12px;"></i> 24 people interested</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="row-label">Alongside other tag variants, for comparison</div>
+  <div style="display:flex; gap:16px; justify-content:center; margin-bottom: 30px;">
+    <span class="price-tag tag-live">Live now</span>
+    <span class="price-tag tag-hot">🔥 Hot listing</span>
+  </div>
+
+  <p class="note">Same tag shape, hole, and tape strip as "Live now" and every other status badge — only the tint (warm orange/red instead of jade) and the fire emoji distinguish it. This keeps it feeling like part of the same handwritten sign system instead of a separate UI element bolted on.</p>
+</div>
+</body>
+</html>

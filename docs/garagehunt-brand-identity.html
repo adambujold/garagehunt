@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GarageHunt — Visual Identity</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=Caveat:wght@600;700&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #FFF8E7;
+    color: #2B1B4D;
+    font-family: 'Work Sans', sans-serif;
+    padding: 48px 24px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1, h2, h3 { font-family: 'Fredoka', sans-serif; font-weight: 600; }
+  .section { margin-bottom: 72px; }
+  .eyebrow {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #FF6B4A;
+    margin-bottom: 8px;
+  }
+  .section h2 { font-size: 26px; margin-bottom: 6px; }
+  .section p.lede { font-size: 15px; color: #5B4A7A; max-width: 560px; margin-bottom: 28px; line-height: 1.6; }
+
+  /* Hero */
+  .hero {
+    text-align: center;
+    padding: 56px 24px 64px;
+    background: #2B1B4D;
+    border-radius: 24px;
+    margin-bottom: 72px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before, .hero::after {
+    content: '';
+    position: absolute;
+    border-radius: 50%;
+  }
+  .hero::before { width: 220px; height: 220px; background: #FF6B4A; opacity: 0.15; top: -80px; left: -60px; }
+  .hero::after { width: 260px; height: 260px; background: #0F9D8B; opacity: 0.18; bottom: -100px; right: -60px; }
+  .hero-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+    z-index: 1;
+  }
+  .hero-logo .tag-icon {
+    width: 46px; height: 46px;
+    background: #FFC53D;
+    border-radius: 10px 10px 10px 2px;
+    transform: rotate(-12deg);
+    display: flex; align-items: center; justify-content: center;
+    margin-right: 6px;
+    box-shadow: 0 2px 0 rgba(0,0,0,0.15);
+  }
+  .hero-logo .tag-icon i { font-size: 24px; color: #2B1B4D; }
+  .hero-logo .wordmark {
+    font-size: 44px;
+    font-weight: 700;
+    color: #FFF8E7;
+    letter-spacing: -0.01em;
+  }
+  .hero-logo .wordmark span { color: #FFC53D; }
+  .hero-tagline {
+    font-family: 'Caveat', cursive;
+    font-size: 26px;
+    font-weight: 600;
+    color: #FFC53D;
+    margin-top: 10px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Palette */
+  .palette-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .swatch {
+    border-radius: 16px;
+    padding: 20px 16px 16px;
+    position: relative;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+  }
+  .swatch .name { font-family: 'Fredoka', sans-serif; font-size: 15px; font-weight: 600; }
+  .swatch .hex { font-family: 'Work Sans', monospace; font-size: 12px; opacity: 0.75; margin-top: 2px; }
+
+  /* Type specimen */
+  .type-row { display: flex; align-items: baseline; gap: 20px; padding: 20px 0; border-bottom: 1px solid #E8D9BE; }
+  .type-row:last-child { border-bottom: none; }
+  .type-label { width: 90px; flex-shrink: 0; font-size: 12px; font-weight: 600; color: #5B4A7A; text-transform: uppercase; letter-spacing: 0.06em; }
+  .type-sample-display { font-family: 'Fredoka', sans-serif; font-size: 34px; font-weight: 600; }
+  .type-sample-body { font-family: 'Work Sans', sans-serif; font-size: 17px; color: #3E2E5C; }
+  .type-sample-accent { font-family: 'Caveat', cursive; font-size: 30px; font-weight: 700; color: #FF6B4A; }
+
+  /* Price tag signature */
+  .tag-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .price-tag {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #FFF8E7;
+    border: 1.5px solid #E0C88A;
+    padding: 8px 16px 8px 22px;
+    border-radius: 2px;
+    font-family: 'Kalam', cursive;
+    font-weight: 400;
+    font-size: 14px;
+    color: #2B1B4D;
+  }
+  .price-tag::before {
+    content: '';
+    position: absolute;
+    left: 7px; top: 50%;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #E0C88A;
+    transform: translateY(-50%);
+  }
+  .price-tag::after {
+    content: '';
+    position: absolute;
+    top: -9px; left: 10px;
+    width: 32px; height: 13px;
+    background: rgba(255,229,153,0.75);
+    border: 1px solid rgba(180,150,60,0.35);
+    transform: rotate(-6deg);
+  }
+  .price-tag:nth-of-type(odd) { transform: rotate(-3deg); }
+  .price-tag:nth-of-type(even) { transform: rotate(2deg); }
+  .tag-live { border-color: rgba(15,157,139,0.4); }
+  .tag-live::before { background: rgba(15,157,139,0.5); }
+  .tag-live::after { background: rgba(15,157,139,0.25); border-color: rgba(15,157,139,0.35); }
+  .tag-town { border-color: rgba(123,95,217,0.4); }
+  .tag-town::before { background: rgba(123,95,217,0.5); }
+  .tag-town::after { background: rgba(123,95,217,0.22); border-color: rgba(123,95,217,0.35); }
+  .tag-new { border-color: rgba(255,107,74,0.4); }
+  .tag-new::before { background: rgba(255,107,74,0.5); }
+  .tag-new::after { background: rgba(255,107,74,0.2); border-color: rgba(255,107,74,0.35); }
+  .tag-cat { border-color: #E0C88A; }
+
+  /* Applied mockup */
+  .applied {
+    background: #2B1B4D;
+    border-radius: 24px;
+    padding: 32px;
+  }
+  .phone {
+    max-width: 340px;
+    margin: 0 auto;
+    background: #FFF8E7;
+    border-radius: 28px;
+    padding: 14px;
+    border: 4px solid #1A1030;
+  }
+  .app-header { display: flex; align-items: center; justify-content: space-between; padding: 4px 6px 12px; }
+  .app-logo { display: flex; align-items: center; gap: 8px; }
+  .app-logo .mini-tag { width: 26px; height: 26px; background: #FFC53D; border-radius: 7px 7px 7px 2px; transform: rotate(-10deg); display: flex; align-items: center; justify-content: center; }
+  .app-logo .mini-tag i { font-size: 14px; color: #2B1B4D; }
+  .app-logo span { font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 15px; color: #2B1B4D; }
+  .bell-btn { width: 32px; height: 32px; border-radius: 50%; background: #FFEFD1; display: flex; align-items: center; justify-content: center; }
+  .bell-btn i { font-size: 15px; color: #8A5A00; }
+
+  .search-bar {
+    display: flex; align-items: center; gap: 8px;
+    background: white; border: 2px solid #2B1B4D;
+    border-radius: 14px; padding: 0 12px; height: 38px;
+    margin: 0 6px 10px;
+  }
+  .search-bar i { font-size: 15px; color: #5B4A7A; }
+  .search-bar span { font-size: 12px; color: #5B4A7A; }
+
+  .chip-row { display: flex; gap: 6px; margin: 0 6px 12px; flex-wrap: wrap; }
+  .chip { font-family: 'Fredoka', sans-serif; font-size: 11px; font-weight: 600; padding: 6px 12px; border-radius: 999px; }
+  .chip-active { background: #FF6B4A; color: white; }
+  .chip-idle { background: white; border: 2px solid #F0DFC0; color: #8A5A00; }
+
+  .map-card {
+    position: relative; margin: 0 6px 12px; height: 160px;
+    background: #EDE3F5; border-radius: 18px; overflow: hidden;
+    border: 2px solid #2B1B4D;
+  }
+  .route-dot { position: absolute; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Fredoka'; font-size: 10px; font-weight: 600; color: white; border: 2px solid #FFF8E7; }
+
+  .feed-card { display: flex; gap: 10px; align-items: center; background: white; border: 2px solid #F0DFC0; border-radius: 14px; padding: 10px; margin: 0 6px 8px; }
+  .feed-thumb { width: 46px; height: 46px; border-radius: 10px; background: #FFEFD1; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .feed-thumb i { font-size: 18px; color: #C98A00; }
+  .feed-title { font-family: 'Fredoka', sans-serif; font-size: 13px; font-weight: 600; color: #2B1B4D; }
+  .feed-sub { font-size: 11px; color: #8A7A9E; margin-top: 1px; }
+
+  .ad-card { display: flex; gap: 10px; align-items: center; background: #FBF6EA; border: 2px dashed #D9C6A0; border-radius: 14px; padding: 10px; margin: 0 6px 8px; }
+  .ad-label { font-family: 'Work Sans', sans-serif; font-size: 9px; font-weight: 600; color: #A88A55; text-transform: uppercase; letter-spacing: 0.05em; background: #F0E4C8; padding: 2px 6px; border-radius: 4px; position: absolute; top: 8px; right: 10px; }
+
+  .note {
+    font-size: 13px;
+    color: #5B4A7A;
+    line-height: 1.7;
+    max-width: 640px;
+    margin-top: 20px;
+  }
+  .note strong { color: #2B1B4D; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <div class="hero-logo">
+      <div class="tag-icon"><i class="ti ti-map-pin-filled"></i></div>
+      <span class="wordmark">Garage<span>Hunt</span></span>
+    </div>
+    <div class="hero-tagline">Canada's weekend treasure hunt</div>
+  </div>
+
+  <div class="section">
+    <div class="eyebrow">Concept</div>
+    <h2>Rooted in the garage sale itself</h2>
+    <p class="lede">The signature comes from what a garage sale actually looks like: hand-written price tags taped to furniture, a folding table, a marker sign at the end of the driveway. The whole identity is built around the price tag as a shape and Saturday-morning energy as a mood — not a generic "friendly startup" look.</p>
+  </div>
+
+  <div class="section">
+    <div class="eyebrow">Palette</div>
+    <h2>Sale-sign colors, not tech-startup colors</h2>
+    <p class="lede">Warm paper background instead of a cold white app canvas. Marigold and coral do the energetic lifting; deep plum grounds it instead of the usual near-black.</p>
+    <div class="palette-grid">
+      <div class="swatch" style="background: #FFC53D; color: #2B1B4D;"><div class="name">Marigold</div><div class="hex">#FFC53D</div></div>
+      <div class="swatch" style="background: #FF6B4A; color: #FFF8E7;"><div class="name">Tomato coral</div><div class="hex">#FF6B4A</div></div>
+      <div class="swatch" style="background: #0F9D8B; color: #FFF8E7;"><div class="name">Jade</div><div class="hex">#0F9D8B</div></div>
+      <div class="swatch" style="background: #2B1B4D; color: #FFF8E7;"><div class="name">Ink plum</div><div class="hex">#2B1B4D</div></div>
+      <div class="swatch" style="background: #7B5FD9; color: #FFF8E7;"><div class="name">Dusk violet</div><div class="hex">#7B5FD9</div></div>
+      <div class="swatch" style="background: #FFF8E7; color: #2B1B4D; border: 2px solid #E8D9BE;"><div class="name">Paper cream</div><div class="hex">#FFF8E7</div></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="eyebrow">Typography</div>
+    <h2>Rounded, confident, a little handwritten</h2>
+    <div class="type-row">
+      <div class="type-label">Display</div>
+      <div class="type-sample-display">Fredoka — headlines &amp; logo</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">Body</div>
+      <div class="type-sample-body">Work Sans — everything you read: listings, forms, descriptions.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-label">Accent</div>
+      <div class="type-sample-accent">Caveat — used sparingly, like a sign written by hand</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="eyebrow">Signature element</div>
+    <h2>The price tag</h2>
+    <p class="lede">Every status badge and category chip is shaped like a price tag — squared on one side, rounded on the other, with a punched hole. It's the one motif repeated everywhere so the app is recognizable even in a screenshot with no logo visible.</p>
+    <div class="tag-row">
+      <span class="price-tag tag-live"><i class="ti ti-circle-filled" style="font-size:8px; color:#0F9D8B;"></i> Live now</span>
+      <span class="price-tag tag-town"><i class="ti ti-users" style="font-size:12px; color:#7B5FD9;"></i> 42 homes</span>
+      <span class="price-tag tag-new">New match</span>
+      <span class="price-tag tag-cat">Furniture</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="eyebrow">Applied</div>
+    <h2>Discover screen, re-skinned</h2>
+    <p class="lede">Same layout and logic we already designed — now with actual personality, plus a sponsored placement shown in context rather than described.</p>
+    <div class="applied">
+      <div class="phone">
+        <div class="app-header">
+          <div class="app-logo">
+            <div class="mini-tag"><i class="ti ti-map-pin-filled"></i></div>
+            <span>GarageHunt</span>
+          </div>
+          <div class="bell-btn"><i class="ti ti-bell"></i></div>
+        </div>
+
+        <div class="search-bar"><i class="ti ti-search"></i><span>Search categories or items</span></div>
+
+        <div class="chip-row">
+          <span class="chip chip-active">This weekend</span>
+          <span class="chip chip-idle">Furniture</span>
+          <span class="chip chip-idle">Town-wide</span>
+        </div>
+
+        <div class="map-card">
+          <div class="route-dot" style="top:30px; left:60px; background:#FF6B4A;">1.2k</div>
+          <div class="route-dot" style="top:70px; left:150px; background:#7B5FD9;">42</div>
+          <div class="route-dot" style="top:100px; left:230px; background:#0F9D8B;">2.4k</div>
+        </div>
+
+        <div class="feed-card">
+          <div class="feed-thumb"><i class="ti ti-photo"></i></div>
+          <div>
+            <div class="feed-title">Riverdale community sale</div>
+            <div class="feed-sub">1.8km &middot; Sat, 9am&ndash;2pm</div>
+          </div>
+        </div>
+
+        <div class="ad-card" style="position: relative;">
+          <div class="ad-label">Sponsored</div>
+          <div class="feed-thumb" style="background:#EDE3F5;"><i class="ti ti-building-store" style="color:#7B5FD9;"></i></div>
+          <div>
+            <div class="feed-title" style="color:#5B4A7A;">Local hardware store &middot; 15% off this weekend</div>
+            <div class="feed-sub">Promoted</div>
+          </div>
+        </div>
+
+        <div class="feed-card">
+          <div class="feed-thumb"><i class="ti ti-photo"></i></div>
+          <div>
+            <div class="feed-title">Maple St. moving sale</div>
+            <div class="feed-sub">1.2km &middot; Sat, 9am&ndash;2pm</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note"><strong>On the ad placement:</strong> it sits inline in the feed, uses the same card shape as real listings so it doesn't feel bolted on, but is clearly labeled "Sponsored" and visually distinct (dashed border, muted color) so nobody mistakes it for a real sale. This matches the earlier decision — no popups or interstitials, ads live at natural breaks in scrolling content only.</p>
+  </div>
+
+</div>
+</body>
+</html>

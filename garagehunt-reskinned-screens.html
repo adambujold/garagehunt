@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>GarageHunt — Reskinned screens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Work+Sans:wght@400;500;600&family=Caveat:wght@600;700&family=Kalam:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #EDE3F5; color: #2B1B4D; font-family: 'Work Sans', sans-serif; padding: 40px 20px; }
+  .wrap { max-width: 1200px; margin: 0 auto; }
+  h1, h2, h3 { font-family: 'Fredoka', sans-serif; font-weight: 600; }
+
+  .page-header { text-align: center; margin-bottom: 48px; }
+  .page-header .logo-row { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .mini-tag { width: 30px; height: 30px; background: #FFC53D; border-radius: 8px 8px 8px 2px; transform: rotate(-10deg); display: flex; align-items: center; justify-content: center; }
+  .mini-tag i { font-size: 16px; color: #2B1B4D; }
+  .page-header .logo-row span { font-size: 22px; font-weight: 700; }
+  .page-header p { font-family: 'Caveat', cursive; font-size: 20px; color: #7B5FD9; font-weight: 600; }
+
+  .group { margin-bottom: 56px; }
+  .group-title { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #7B5FD9; margin-bottom: 16px; padding-left: 4px; }
+
+  .phone-grid { display: flex; flex-wrap: wrap; gap: 24px; }
+  .screen-block { width: 300px; }
+  .screen-name { font-family: 'Fredoka', sans-serif; font-size: 12px; font-weight: 600; color: #5B4A7A; margin-bottom: 8px; text-align: center; }
+
+  .phone { background: #FFF8E7; border-radius: 22px; padding: 10px; border: 3px solid #1A1030; }
+
+  /* shared components */
+  .app-header { display: flex; align-items: center; justify-content: space-between; padding: 3px 4px 10px; }
+  .app-logo { display: flex; align-items: center; gap: 6px; }
+  .app-logo span { font-family: 'Fredoka', sans-serif; font-weight: 600; font-size: 13px; }
+  .icon-btn { width: 26px; height: 26px; border-radius: 50%; background: #FFEFD1; display: flex; align-items: center; justify-content: center; }
+  .icon-btn i { font-size: 13px; color: #8A5A00; }
+  .back-row { display: flex; align-items: center; gap: 8px; padding: 3px 4px 8px; }
+  .back-row i.chev { font-size: 17px; color: #2B1B4D; }
+  .back-row span { font-family: 'Fredoka', sans-serif; font-size: 13px; font-weight: 600; }
+
+  .search-bar { display: flex; align-items: center; gap: 6px; background: white; border: 2px solid #2B1B4D; border-radius: 12px; padding: 0 10px; height: 32px; margin: 0 4px 8px; }
+  .search-bar i { font-size: 13px; color: #5B4A7A; }
+  .search-bar span { font-size: 11px; color: #5B4A7A; }
+
+  .chip-row { display: flex; gap: 5px; margin: 0 4px 10px; flex-wrap: wrap; }
+  .chip { font-family: 'Fredoka', sans-serif; font-size: 10px; font-weight: 600; padding: 5px 10px; border-radius: 999px; }
+  .chip-active { background: #FF6B4A; color: white; }
+  .chip-idle { background: white; border: 2px solid #F0DFC0; color: #8A5A00; }
+
+  .map-card { position: relative; margin: 0 4px 10px; height: 130px; background: #EDE3F5; border-radius: 14px; overflow: hidden; border: 2px solid #2B1B4D; }
+  .route-dot { position: absolute; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Fredoka'; font-size: 9px; font-weight: 600; color: white; border: 2px solid #FFF8E7; }
+  .route-line { position: absolute; height: 2px; background: repeating-linear-gradient(90deg, #7B5FD9 0 6px, transparent 6px 11px); }
+  .map-fab { position: absolute; bottom: 8px; right: 8px; display: flex; align-items: center; gap: 5px; background: #FF6B4A; color: white; border-radius: 999px; padding: 6px 11px; font-family: 'Fredoka'; font-size: 10px; font-weight: 600; }
+
+  .feed-card { display: flex; gap: 8px; align-items: center; background: white; border: 2px solid #F0DFC0; border-radius: 12px; padding: 8px; margin: 0 4px 7px; }
+  .feed-thumb { width: 38px; height: 38px; border-radius: 9px; background: #FFEFD1; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .feed-thumb i { font-size: 15px; color: #C98A00; }
+  .feed-title { font-family: 'Fredoka', sans-serif; font-size: 11px; font-weight: 600; }
+  .feed-sub { font-size: 10px; color: #8A7A9E; margin-top: 1px; }
+
+  .price-tag {
+    position: relative; display: inline-flex; align-items: center;
+    background: #FFF8E7; border: 1.5px solid #E0C88A;
+    padding: 4px 10px 4px 14px; border-radius: 2px;
+    font-family: 'Kalam', cursive; font-weight: 400; font-size: 10px; color: #2B1B4D;
+  }
+  .price-tag::before { content: ''; position: absolute; left: 4px; top: 50%; width: 4px; height: 4px; border-radius: 50%; background: #E0C88A; transform: translateY(-50%); }
+  .price-tag::after { content: ''; position: absolute; top: -6px; left: 6px; width: 24px; height: 9px; background: rgba(255,229,153,0.75); border: 1px solid rgba(180,150,60,0.35); transform: rotate(-6deg); }
+  .price-tag:nth-of-type(odd) { transform: rotate(-3deg); }
+  .price-tag:nth-of-type(even) { transform: rotate(2deg); }
+  .tag-live { border-color: rgba(15,157,139,0.4); }
+  .tag-live::before { background: rgba(15,157,139,0.5); }
+  .tag-live::after { background: rgba(15,157,139,0.25); border-color: rgba(15,157,139,0.35); }
+  .tag-town { border-color: rgba(123,95,217,0.4); }
+  .tag-town::before { background: rgba(123,95,217,0.5); }
+  .tag-town::after { background: rgba(123,95,217,0.22); border-color: rgba(123,95,217,0.35); }
+  .tag-new { border-color: rgba(255,107,74,0.4); }
+  .tag-new::before { background: rgba(255,107,74,0.5); }
+  .tag-new::after { background: rgba(255,107,74,0.2); border-color: rgba(255,107,74,0.35); }
+  .tag-cat { border-color: #E0C88A; }
+  .tag-scheduled { border-color: rgba(35,64,122,0.3); }
+  .tag-scheduled::before { background: rgba(35,64,122,0.4); }
+  .tag-scheduled::after { background: rgba(35,64,122,0.15); border-color: rgba(35,64,122,0.3); }
+  .tag-draft { border-color: rgba(91,74,122,0.3); border-style: dashed; }
+  .tag-draft::before { background: rgba(91,74,122,0.4); }
+  .tag-draft::after { background: rgba(91,74,122,0.15); border-color: rgba(91,74,122,0.3); }
+  .tag-ended { border-color: rgba(138,130,114,0.35); opacity: 0.85; }
+  .tag-ended::before { background: rgba(138,130,114,0.4); }
+  .tag-ended::after { background: rgba(138,130,114,0.18); border-color: rgba(138,130,114,0.3); }
+
+  .bottom-nav { display: flex; justify-content: space-between; padding: 10px 8px 2px; margin-top: 6px; border-top: 2px solid #F0DFC0; }
+  .nav-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .nav-item i { font-size: 17px; color: #B8A8CC; }
+  .nav-item span { font-size: 8px; color: #B8A8CC; }
+  .nav-item.active i, .nav-item.active span { color: #FF6B4A; }
+
+  .progress-dots { display: flex; gap: 4px; margin: 0 4px 10px; }
+  .dot { flex: 1; height: 4px; border-radius: 2px; background: #F0DFC0; }
+  .dot.on { background: #FF6B4A; }
+
+  .field-label { font-size: 10px; font-weight: 600; margin: 0 4px 5px; color: #5B4A7A; }
+  .field { display: flex; align-items: center; gap: 6px; background: white; border: 2px solid #F0DFC0; border-radius: 10px; padding: 0 9px; height: 30px; margin: 0 4px 8px; }
+  .field i { font-size: 12px; color: #8A7A9E; }
+  .field span { font-size: 11px; }
+  .field-row { display: flex; gap: 6px; margin: 0 4px 8px; }
+  .field-row .field { flex: 1; margin: 0; }
+
+  .toggle-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; background: #FFEFD1; border-radius: 10px; padding: 9px; margin: 0 4px 8px; }
+  .toggle-row .label { font-size: 10px; font-weight: 600; }
+  .toggle-row .desc { font-size: 9px; color: #8A5A00; margin-top: 1px; }
+  .toggle-off { width: 30px; height: 17px; border-radius: 999px; background: #D9C6A0; position: relative; flex-shrink: 0; margin-top: 1px; }
+  .toggle-off::after { content: ''; width: 13px; height: 13px; border-radius: 50%; background: white; position: absolute; top: 2px; left: 2px; }
+  .toggle-on { width: 30px; height: 17px; border-radius: 999px; background: #0F9D8B; position: relative; flex-shrink: 0; margin-top: 1px; }
+  .toggle-on::after { content: ''; width: 13px; height: 13px; border-radius: 50%; background: white; position: absolute; top: 2px; right: 2px; }
+
+  .btn-row { display: flex; gap: 6px; margin: 10px 4px 0; }
+  .btn-primary { flex: 2; background: #FF6B4A; color: white; text-align: center; border-radius: 10px; padding: 9px; font-family: 'Fredoka'; font-size: 11px; font-weight: 600; }
+  .btn-secondary { flex: 1; background: white; border: 2px solid #F0DFC0; text-align: center; border-radius: 10px; padding: 9px; font-family: 'Fredoka'; font-size: 11px; font-weight: 600; color: #5B4A7A; }
+  .btn-full { width: calc(100% - 8px); margin: 10px 4px 0; }
+
+  .photo-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 6px; margin: 0 4px 10px; }
+  .photo-slot { aspect-ratio: 1; border-radius: 8px; background: #FFEFD1; display: flex; align-items: center; justify-content: center; }
+  .photo-slot.empty { background: white; border: 2px dashed #E7D9B8; }
+  .photo-slot i { font-size: 14px; color: #C98A00; }
+  .photo-slot.empty i { color: #C9B98A; }
+
+  .stats-row { display: flex; gap: 6px; margin: 0 4px 10px; }
+  .stat-card { flex: 1; background: #FFEFD1; border-radius: 10px; padding: 8px; text-align: center; }
+  .stat-card .n { font-family: 'Fredoka'; font-size: 14px; font-weight: 600; }
+  .stat-card .l { font-size: 9px; color: #8A5A00; }
+
+  .stop-row { display: flex; align-items: center; gap: 7px; background: white; border: 2px solid #F0DFC0; border-radius: 10px; padding: 7px 8px; margin: 0 4px 6px; }
+  .stop-num { width: 18px; height: 18px; border-radius: 50%; background: #7B5FD9; color: white; font-family: 'Fredoka'; font-size: 9px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .stop-title { font-family: 'Fredoka'; font-size: 10px; font-weight: 600; }
+  .stop-sub { font-size: 9px; color: #8A7A9E; }
+
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: #FFEFD1; display: flex; align-items: center; justify-content: center; font-family: 'Fredoka'; font-size: 10px; font-weight: 600; color: #8A5A00; flex-shrink: 0; }
+
+  .join-row { display: flex; align-items: center; gap: 7px; background: white; border: 2px solid #F0DFC0; border-radius: 10px; padding: 7px; margin: 0 4px 6px; }
+  .join-approve { width: 22px; height: 22px; border-radius: 50%; background: #0F9D8B; display: flex; align-items: center; justify-content: center; }
+  .join-deny { width: 22px; height: 22px; border-radius: 50%; background: white; border: 2px solid #F0DFC0; display: flex; align-items: center; justify-content: center; }
+  .join-approve i { color: white; font-size: 11px; } .join-deny i { color: #D9534F; font-size: 11px; }
+
+  .banner-note { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; margin: 0 4px 8px; font-size: 10px; }
+  .banner-amber { background: #FFEFD1; color: #8A5A00; }
+  .banner-jade { background: #DCF3EE; color: #0F6E56; }
+
+  .review-card { background: white; border: 2px solid #F0DFC0; border-radius: 12px; padding: 10px; margin: 0 4px 8px; }
+
+  /* desktop */
+  .desktop-block { border: 3px solid #1A1030; border-radius: 18px; overflow: hidden; background: #FFF8E7; }
+  .desk-nav { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: white; border-bottom: 2px solid #F0DFC0; }
+  .desk-nav .left { display: flex; align-items: center; gap: 22px; }
+  .desk-nav .links { display: flex; gap: 16px; font-size: 12px; color: #8A7A9E; }
+  .desk-nav .links .on { color: #2B1B4D; font-weight: 600; }
+  .desk-btn { background: #FF6B4A; color: white; font-family: 'Fredoka'; font-size: 11px; font-weight: 600; border-radius: 8px; padding: 6px 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="page-header">
+    <div class="logo-row"><div class="mini-tag"><i class="ti ti-map-pin-filled"></i></div><span>GarageHunt</span></div>
+    <p>every screen, one identity</p>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Mobile app</div>
+    <div class="phone-grid">
+
+      <div class="screen-block">
+        <div class="screen-name">Discover / map</div>
+        <div class="phone">
+          <div class="app-header"><div class="app-logo"><div class="mini-tag" style="width:22px;height:22px;"><i class="ti ti-map-pin-filled" style="font-size:12px;"></i></div><span>GarageHunt</span></div><div class="icon-btn"><i class="ti ti-bell"></i></div></div>
+          <div class="search-bar"><i class="ti ti-search"></i><span>Search categories or items</span></div>
+          <div class="chip-row"><span class="chip chip-active">This weekend</span><span class="chip chip-idle">Furniture</span><span class="chip chip-idle">Town-wide</span></div>
+          <div class="map-card">
+            <div class="route-dot" style="top:25px;left:55px;background:#FF6B4A;">1.2k</div>
+            <div class="route-dot" style="top:60px;left:140px;background:#7B5FD9;">42</div>
+            <div class="route-dot" style="top:90px;left:210px;background:#0F9D8B;">2.4k</div>
+            <div class="map-fab"><i class="ti ti-route" style="font-size:11px;"></i>Plan route</div>
+          </div>
+          <div class="feed-card"><div class="feed-thumb"><i class="ti ti-photo"></i></div><div><div class="feed-title">Riverdale community sale</div><div class="feed-sub">1.8km &middot; Sat 9am</div></div></div>
+          <div class="bottom-nav">
+            <div class="nav-item active"><i class="ti ti-map-2"></i><span>Discover</span></div>
+            <div class="nav-item"><i class="ti ti-target-arrow"></i><span>Looking for</span></div>
+            <div class="nav-item"><i class="ti ti-plus"></i><span>List sale</span></div>
+            <div class="nav-item"><i class="ti ti-user"></i><span>Profile</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen-block">
+        <div class="screen-name">Route planner &middot; manual</div>
+        <div class="phone">
+          <div class="back-row"><i class="ti ti-chevron-left chev"></i><span>Plan my route</span></div>
+          <div class="chip-row"><span class="chip chip-active">Manual pick</span><span class="chip chip-idle">Auto-suggest</span></div>
+          <div class="map-card">
+            <div class="route-dot" style="top:85px;left:40px;background:#7B5FD9;">1</div>
+            <div class="route-dot" style="top:45px;left:110px;background:#7B5FD9;">2</div>
+            <div class="route-dot" style="top:60px;left:190px;background:#7B5FD9;">3</div>
+            <div class="route-dot" style="top:20px;left:250px;background:#7B5FD9;">4</div>
+          </div>
+          <div class="stats-row"><div class="stat-card"><div class="n">4</div><div class="l">stops</div></div><div class="stat-card"><div class="n">6.4km</div><div class="l">total</div></div><div class="stat-card"><div class="n">22min</div><div class="l">drive</div></div></div>
+          <div class="stop-row"><i class="ti ti-grip-vertical" style="font-size:12px;color:#B8A8CC;"></i><div class="stop-num">1</div><div><div class="stop-title">Maple St. moving sale</div><div class="stop-sub">Starts 9:00am</div></div></div>
+          <div class="stop-row"><i class="ti ti-grip-vertical" style="font-size:12px;color:#B8A8CC;"></i><div class="stop-num">2</div><div><div class="stop-title">Oakwood family sale</div><div class="stop-sub">Starts 9:00am</div></div></div>
+          <div class="stop-row"><i class="ti ti-grip-vertical" style="font-size:12px;color:#B8A8CC;"></i><div class="stop-num">3</div><div><div class="stop-title">Birchmount tools</div><div class="stop-sub">Starts 8:00am</div></div></div>
+          <div class="btn-primary btn-full" style="display:flex;align-items:center;justify-content:center;gap:5px;"><i class="ti ti-navigation" style="font-size:12px;"></i>Start navigation</div>
+        </div>
+      </div>
+
+      <div class="screen-block">
+        <div class="screen-name">Route planner &middot; auto-suggest</div>
+        <div class="phone">
+          <div class="back-row"><i class="ti ti-chevron-left chev"></i><span>Plan my route</span></div>
+          <div class="chip-row"><span class="chip chip-idle">Manual pick</span><span class="chip chip-active">Auto-suggest</span></div>
+          <div class="field" style="justify-content:space-between;"><span style="display:flex;align-items:center;gap:5px;"><i class="ti ti-map-pin"></i>10km &middot; Sat morning</span><span style="color:#FF6B4A;font-weight:600;">Edit</span></div>
+          <div class="map-card">
+            <div class="route-dot" style="top:40px;left:35px;background:#0F9D8B;">1</div>
+            <div class="route-dot" style="top:75px;left:110px;background:#0F9D8B;">2</div>
+            <div class="route-dot" style="top:35px;left:190px;background:#0F9D8B;">3</div>
+            <div class="route-dot" style="top:65px;left:255px;background:#0F9D8B;">4</div>
+          </div>
+          <div class="stats-row"><div class="stat-card"><div class="n">4</div><div class="l">stops</div></div><div class="stat-card"><div class="n">5.9km</div><div class="l">total</div></div><div class="stat-card"><div class="n">19min</div><div class="l">drive</div></div></div>
+          <div class="stop-row"><div class="stop-num" style="background:#0F9D8B;">1</div><div style="flex:1;"><div class="stop-title">Elmwood family sale <span class="price-tag tag-new" style="padding:2px 6px 2px 8px;font-size:8px;">Matched</span></div><div class="stop-sub">Furniture, kids</div></div><i class="ti ti-refresh" style="font-size:12px;color:#B8A8CC;"></i></div>
+          <div class="stop-row"><div class="stop-num" style="background:#0F9D8B;">2</div><div style="flex:1;"><div class="stop-title">Birchmount tools</div><div class="stop-sub">Tools &middot; 8:00am</div></div><i class="ti ti-refresh" style="font-size:12px;color:#B8A8CC;"></i></div>
+          <div class="btn-primary btn-full" style="display:flex;align-items:center;justify-content:center;gap:5px;"><i class="ti ti-navigation" style="font-size:12px;"></i>Start navigation</div>
+        </div>
+      </div>
+
+      <div class="screen-block">
+        <div class="screen-name">List a sale &middot; step 1</div>
+        <div class="phone">
+          <div class="back-row"><i class="ti ti-chevron-left chev"></i><span>List a sale</span></div>
+          <div class="progress-dots"><div class="dot on"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+          <div class="field-label">Address</div>
+          <div class="field"><i class="ti ti-map-pin"></i><span>42 Maple Street, London</span></div>
+          <div class="map-card" style="height:70px;"><div class="route-dot" style="top:26px;left:130px;background:#FF6B4A;width:14px;height:14px;"></div></div>
+          <div class="field-label">Date &amp; time</div>
+          <div class="field-row"><div class="field"><i class="ti ti-calendar"></i><span>Sat, Jul 11</span></div><div class="field"><i class="ti ti-clock"></i><span>9am&ndash;2pm</span></div></div>
+          <div class="toggle-row"><div><div class="label">Show exact address now</div><div class="desc">Off by default</div></div><div class="toggle-off"></div></div>
+          <div class="btn-row"><div class="btn-secondary">Back</div><div class="btn-primary">Continue</div></div>
+        </div>
+      </div>
+
+      <div class="screen-block">
+        <div class="screen-name">List a sale &middot; step 2</div>
+        <div class="phone">
+          <div class="back-row"><i class="ti ti-chevron-left chev"></i><span>List a sale</span></div>
+          <div class="progress-dots"><div class="dot on"></div><div class="dot on"></div><div class="dot"></div><div class="dot"></div></div>
+          <div class="field-label">Photos</div>
+          <div class="photo-grid">
+            <div class="photo-slot empty"><i class="ti ti-camera-plus"></i></div>
+            <div class="photo-slot"><i class="ti ti-photo"></i></div>
+            <div class="photo-slot"><i class="ti ti-photo"></i></div>
+            <div class="photo-slot empty"><i class="ti ti-plus"></i></div>
+          </div>
+          <div class="field-label">Categories</div>
+          <div class="chip-row"><span class="chip chip-active">Furniture</span><span class="chip chip-idle">Kids</span><span class="chip chip-active">Tools</span><span class="chip chip-idle">Clothing</span></div>
+          <div class="field-label">Description</div>
+          <div class="field" style="height:44px; align-items:flex-start; padding-top:6px;"><span style="color:#B8A8CC;">Moving sale, everything must go...</span></div>
+          <div class="btn-row"><div class="btn-secondary">Back</div><div class="btn-primary">Continue</div></div>
+        </div>
+      </div>
+
+      <div class="screen-block">
+        <div class="screen-name">List a sale &middot; step 3</div>
+        <div class="phone">
+          <div class="back-row"><i class="ti ti-chevron-left chev"></i><span>List a sale</span></div>
+          <div class="progress-dots"><div class="dot on"></div><div class="dot on"></div><div class="dot on"></div><div class="dot"></div></div>
+          <div class="review-card">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div class="avatar" style="background:#EDE3F5;color:#7B5FD9;"><i class="ti ti-users" style="font-size:14px;"></i></div><div><div class="stop-title">Riverdale community sale</div><div class="stop-sub">Sat, Jul 11 &middot; 42 homes</div></div></div>
+            <div class="btn-row" style="margin-top:2px;"><div class="btn-secondary">Not this time</div><div class="btn-primary">Request to join</div></div>
+          </div>
+          <div class="btn-row"><div class="btn-secondary">Back</div><div class="btn-primary">Continue</div></div>
+        </div>
+      </div>
+
+      <div class="screen-block">
+        <div class="screen-name">List a sale &middot; step 4</div>
+        <div class="phone">
+          <div class="back-row"><i class="ti ti-chevron-left chev"></i><span>List a sale</span></div>
+          <div class="progress-dots"><div class="dot on"></div><div class="dot on"></div><div class="dot on"></div><div class="dot on"></div></div>
+          <div class="review-card">
+            <div class="photo-grid" style="margin-bottom:8px;"><div class="photo-slot"><i class="ti ti-photo"></i></div><div class="photo-slot"><i class="ti ti-photo"></i></div><div class="photo-slot"><i class="ti ti-photo"></i></div></div>
+            <div class="stop-sub" style="margin-bottom:3px;"><i class="ti ti-map-pin"></i> Maple Street area, London</div>
+            <div class="stop-sub" style="margin-bottom:6px;"><i class="ti ti-calendar"></i> Sat, Jul 11 &middot; 9am&ndash;2pm</div>
+            <div class="chip-row" style="margin:0 0 6px;"><span class="chip chip-idle">Furniture</span><span class="chip chip-idle">Tools</span></div>
+            <div class="stop-sub" style="border-top:1px solid #F0DFC0; padding-top:6px;">Moving sale, everything must go.</div>
+          </div>
+          <div class="btn-row"><div class="btn-secondary">Back</div><div class="btn-primary">Publish sale</div></div>
+        </div>
+      </div>
+
+      <div class="screen-block">
+        <div class="screen-name">I'm looking for</div>
+        <div class="phone">
+          <div class="back-row"><i class="ti ti-chevron-left chev"></i><span>I'm looking for</span></div>
+          <div class="field-label">What are you after?</div>
+          <div class="field"><i class="ti ti-search"></i><span>kids bike, dining table...</span></div>
+          <div class="field-label">Or match by category</div>
+          <div class="chip-row"><span class="chip chip-active">Furniture</span><span class="chip chip-idle">Kids</span><span class="chip chip-idle">Tools</span></div>
+          <div class="field-label">Area &amp; radius</div>
+          <div class="field"><i class="ti ti-map-pin"></i><span>London, ON &middot; 10km</span></div>
+          <div class="toggle-row"><div><div class="label">Notify me</div><div class="desc">Push alert on new match</div></div><div class="toggle-on"></div></div>
+          <div class="btn-primary btn-full" style="display:flex;align-items:center;justify-content:center;gap:5px;"><i class="ti ti-target-arrow" style="font-size:12px;"></i>Save &amp; find matches</div>
+        </div>
+      </div>
+
+      <div class="screen-block">
+        <div class="screen-name">Matches for you</div>
+        <div class="phone">
+          <div class="back-row"><i class="ti ti-chevron-left chev"></i><span>Matches for you</span></div>
+          <div class="stop-sub" style="margin: 0 4px 8px;">"kids bike" &middot; Furniture &middot; 10km</div>
+          <div class="banner-note banner-jade"><i class="ti ti-bell-ringing" style="font-size:12px;"></i>1 new match since yesterday</div>
+          <div class="feed-card" style="border-color:#7B5FD9;"><div class="feed-thumb"><i class="ti ti-photo"></i></div><div style="flex:1;"><div style="display:flex;justify-content:space-between;"><div class="feed-title">Oakwood family sale</div><span class="price-tag tag-new" style="padding:2px 6px 2px 8px;font-size:8px;">New</span></div><div class="feed-sub">2.4km &middot; Sat, Jul 11</div></div></div>
+          <div class="feed-card"><div class="feed-thumb"><i class="ti ti-photo"></i></div><div><div class="feed-title">Elmwood moving sale</div><div class="feed-sub">4.1km &middot; Sun, Jul 12</div></div></div>
+          <div class="btn-secondary btn-full" style="display:flex;align-items:center;justify-content:center;gap:5px;"><i class="ti ti-settings" style="font-size:11px;"></i>Edit search</div>
+        </div>
+      </div>
+
+      <div class="screen-block">
+        <div class="screen-name">My listings</div>
+        <div class="phone">
+          <div class="app-header"><span style="font-family:'Fredoka';font-weight:600;font-size:13px;">My listings</span><div class="icon-btn" style="background:#FF6B4A;"><i class="ti ti-plus" style="color:white;"></i></div></div>
+          <div class="review-card" style="margin-bottom:7px;"><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span class="price-tag tag-live">Live now</span><i class="ti ti-dots" style="color:#B8A8CC;font-size:13px;"></i></div><div class="stop-title">Maple Street moving sale</div><div class="stop-sub" style="margin-bottom:5px;">Today &middot; 9am&ndash;2pm</div><div style="display:flex;gap:10px;font-size:9px;color:#8A7A9E;"><span><i class="ti ti-eye"></i> 128</span><span><i class="ti ti-heart"></i> 14</span></div></div>
+          <div class="review-card" style="margin-bottom:7px;"><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span class="price-tag tag-scheduled">Scheduled</span><i class="ti ti-dots" style="color:#B8A8CC;font-size:13px;"></i></div><div class="stop-title">Backyard tool sale</div><div class="stop-sub">Sat, Jul 18 &middot; 8am&ndash;12pm</div></div>
+          <div class="review-card" style="border-style:dashed;"><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span class="price-tag tag-draft">Draft</span><i class="ti ti-dots" style="color:#B8A8CC;font-size:13px;"></i></div><div class="stop-title">Untitled sale</div><div class="stop-sub" style="color:#FF6B4A;">Finish listing</div></div>
+        </div>
+      </div>
+
+      <div class="screen-block">
+        <div class="screen-name">Sale detail</div>
+        <div class="phone">
+          <div class="app-header"><i class="ti ti-chevron-left chev"></i><div style="display:flex;gap:10px;"><i class="ti ti-share" style="color:#8A7A9E;"></i><i class="ti ti-heart" style="color:#8A7A9E;"></i></div></div>
+          <div class="map-card" style="height:100px; background:#FFEFD1; display:flex; align-items:center; justify-content:center;"><i class="ti ti-photo" style="font-size:24px;color:#C98A00;"></i><span class="price-tag tag-town" style="position:absolute; top:6px; left:8px; font-size:8px; padding:3px 7px 3px 9px;">Community sale</span></div>
+          <div style="margin:0 4px 6px;"><div class="stop-title" style="font-size:13px;">Maple Street moving sale</div></div>
+          <div class="chip-row"><span class="price-tag tag-live">Live now</span></div>
+          <div class="chip-row"><span class="chip chip-idle">Furniture</span><span class="chip chip-idle">Tools</span></div>
+          <div class="review-card"><div class="stop-sub" style="margin-bottom:4px;"><i class="ti ti-calendar"></i> Today &middot; 9am&ndash;2pm</div><div class="stop-sub"><i class="ti ti-map-pin"></i> 42 Maple Street &middot; 1.2km</div></div>
+          <div class="btn-row"><div class="btn-secondary" style="display:flex;align-items:center;justify-content:center;gap:4px;"><i class="ti ti-route" style="font-size:11px;"></i>Add route</div><div class="btn-primary" style="display:flex;align-items:center;justify-content:center;gap:4px;"><i class="ti ti-navigation" style="font-size:11px;"></i>Directions</div></div>
+        </div>
+      </div>
+
+      <div class="screen-block">
+        <div class="screen-name">Organizer dashboard</div>
+        <div class="phone">
+          <div class="app-header"><span style="font-family:'Fredoka';font-weight:600;font-size:13px;">Organizer</span><div class="icon-btn" style="background:#FF6B4A;"><i class="ti ti-plus" style="color:white;"></i></div></div>
+          <div class="stop-sub" style="margin:0 4px 8px;"><i class="ti ti-shield-check" style="color:#0F9D8B;"></i> Verified &middot; Riverdale Residents Assoc.</div>
+          <div class="stats-row"><div class="stat-card"><div class="n">2</div><div class="l">active</div></div><div class="stat-card"><div class="n">67</div><div class="l">homes</div></div><div class="stat-card"><div class="n">5</div><div class="l">pending</div></div></div>
+          <div class="review-card"><div style="display:flex;justify-content:space-between;margin-bottom:6px;"><span class="price-tag tag-live">Upcoming</span></div><div class="stop-title">Riverdale community sale</div><div class="stop-sub" style="margin-bottom:6px;">Sat, Jul 11 &middot; 42 homes</div><div class="banner-note banner-amber"><i class="ti ti-bell" style="font-size:11px;"></i>3 requests waiting</div></div>
+        </div>
+      </div>
+
+      <div class="screen-block">
+        <div class="screen-name">Organizer event detail</div>
+        <div class="phone">
+          <div class="back-row"><i class="ti ti-chevron-left chev"></i><span>Riverdale sale</span></div>
+          <div class="map-card" style="background:#EDE3F5;">
+            <div style="position:absolute; top:15px; left:20px; width:260px; height:100px; border:2px dashed #7B5FD9; border-radius:10px; background:rgba(123,95,217,0.08);"></div>
+            <i class="ti ti-map-pin-filled" style="position:absolute; top:45px; left:60px; font-size:13px; color:#7B5FD9;"></i>
+            <i class="ti ti-map-pin-filled" style="position:absolute; top:65px; left:120px; font-size:13px; color:#7B5FD9;"></i>
+            <i class="ti ti-map-pin-filled" style="position:absolute; top:50px; left:190px; font-size:13px; color:#7B5FD9;"></i>
+          </div>
+          <div class="stats-row"><div class="stat-card"><div class="n">42</div><div class="l">homes</div></div><div class="stat-card"><div class="n">Jul 11</div><div class="l">date</div></div><div class="stat-card"><div class="n">890</div><div class="l">views</div></div></div>
+          <div class="field-label">Pending requests (3)</div>
+          <div class="join-row"><div class="avatar">JM</div><div style="flex:1;"><div class="stop-title">J. Mercer &middot; 58 Elm St.</div></div><div class="join-deny"><i class="ti ti-x"></i></div><div class="join-approve"><i class="ti ti-check"></i></div></div>
+          <div class="join-row"><div class="avatar">RP</div><div style="flex:1;"><div class="stop-title">R. Patel &middot; 12 Oak Ave.</div></div><div class="join-deny"><i class="ti ti-x"></i></div><div class="join-approve"><i class="ti ti-check"></i></div></div>
+          <div class="btn-secondary btn-full" style="display:flex;align-items:center;justify-content:center;gap:5px;"><i class="ti ti-share" style="font-size:11px;"></i>Share event link</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Website (desktop)</div>
+
+    <div style="margin-bottom:24px;">
+      <div class="screen-name" style="text-align:left; margin-bottom:8px;">Discover page</div>
+      <div class="desktop-block">
+        <div class="desk-nav">
+          <div class="left">
+            <div class="app-logo"><div class="mini-tag" style="width:22px;height:22px;"><i class="ti ti-map-pin-filled" style="font-size:12px;"></i></div><span>GarageHunt</span></div>
+            <div class="links"><span class="on">Discover</span><span>I'm looking for</span><span>My listings</span></div>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;"><div class="desk-btn">List a sale</div><div class="avatar" style="background:#FFEFD1;">JD</div></div>
+        </div>
+        <div style="display:flex;">
+          <div style="width:230px; flex-shrink:0; border-right:2px solid #F0DFC0; padding:12px;">
+            <div class="search-bar" style="margin:0 0 8px;"><i class="ti ti-search"></i><span>Search categories</span></div>
+            <div class="chip-row" style="margin:0 0 10px;"><span class="chip chip-active">This weekend</span><span class="chip chip-idle">Furniture</span></div>
+            <div class="feed-card" style="margin:0 0 6px;"><div class="feed-thumb"><i class="ti ti-photo"></i></div><div><div class="feed-title">Riverdale sale</div><div class="feed-sub">1.8km</div></div></div>
+            <div class="feed-card" style="margin:0;"><div class="feed-thumb"><i class="ti ti-photo"></i></div><div><div class="feed-title">Maple St. sale</div><div class="feed-sub">1.2km</div></div></div>
+          </div>
+          <div style="flex:1; position:relative; height:260px; background:#EDE3F5;">
+            <div class="route-dot" style="top:40px;left:130px;background:#FF6B4A;">1.2k</div>
+            <div class="route-dot" style="top:110px;left:260px;background:#7B5FD9;">42</div>
+            <div class="route-dot" style="top:170px;left:170px;background:#0F9D8B;">2.4k</div>
+            <div class="map-fab"><i class="ti ti-route" style="font-size:11px;"></i>Plan route</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="screen-name" style="text-align:left; margin-bottom:8px;">List a sale page</div>
+      <div class="desktop-block">
+        <div class="desk-nav">
+          <div class="left">
+            <div class="app-logo"><div class="mini-tag" style="width:22px;height:22px;"><i class="ti ti-map-pin-filled" style="font-size:12px;"></i></div><span>GarageHunt</span></div>
+            <div class="links"><span>Discover</span><span>I'm looking for</span><span class="on">My listings</span></div>
+          </div>
+          <div class="avatar" style="background:#FFEFD1;">JD</div>
+        </div>
+        <div style="display:flex;">
+          <div style="flex:1; padding:18px; max-width:340px;">
+            <div class="field-label" style="font-size:11px;">Address</div>
+            <div class="field" style="margin:0 0 8px;"><i class="ti ti-map-pin"></i><span>42 Maple St, London, ON</span></div>
+            <div class="field-row" style="margin:0 0 8px;"><div class="field"><i class="ti ti-calendar"></i><span>Sat, Jul 11</span></div><div class="field"><i class="ti ti-clock"></i><span>9am&ndash;2pm</span></div></div>
+            <div class="photo-grid" style="grid-template-columns:repeat(5,1fr); margin:0 0 8px;"><div class="photo-slot empty"><i class="ti ti-upload"></i></div><div class="photo-slot"><i class="ti ti-photo"></i></div><div class="photo-slot empty"><i class="ti ti-plus"></i></div></div>
+            <div class="chip-row" style="margin:0 0 8px;"><span class="chip chip-active">Furniture</span><span class="chip chip-idle">Tools</span></div>
+            <div class="btn-row" style="margin:0;"><div class="btn-secondary">Save draft</div><div class="btn-primary">Publish sale</div></div>
+          </div>
+          <div style="flex:1; border-left:2px solid #F0DFC0; padding:18px; background:#FFF3D6;">
+            <div style="font-size:10px; color:#8A5A00; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">Live preview</div>
+            <div class="review-card" style="max-width:260px;">
+              <div class="photo-slot" style="aspect-ratio:16/9; margin-bottom:8px;"><i class="ti ti-photo"></i></div>
+              <div class="stop-title">Maple Street area, London</div>
+              <div class="stop-sub" style="margin-bottom:6px;">Sat, Jul 11 &middot; 9am&ndash;2pm</div>
+              <div class="chip-row" style="margin:0;"><span class="chip chip-idle">Furniture</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+</body>
+</html>

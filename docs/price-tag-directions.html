@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Price tag — direction exploration</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600&family=Work+Sans:wght@400;600&family=Caveat:wght@600;700&family=Kalam:wght@400;700&family=Shadows+Into+Light&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #EDE3F5; font-family: 'Work Sans', sans-serif; padding: 40px 20px; color: #2B1B4D; }
+  .wrap { max-width: 820px; margin: 0 auto; }
+  h1 { font-family: 'Fredoka', sans-serif; font-size: 22px; margin-bottom: 4px; }
+  .sub { font-size: 13px; color: #5B4A7A; margin-bottom: 40px; }
+  .row { margin-bottom: 48px; }
+  .row-label { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #7B5FD9; margin-bottom: 6px; }
+  .row-desc { font-size: 13px; color: #5B4A7A; margin-bottom: 18px; max-width: 560px; line-height: 1.6; }
+  .tag-field { background: #FFF8E7; border-radius: 16px; padding: 32px 24px; display: flex; flex-wrap: wrap; gap: 22px; align-items: center; }
+
+  /* Direction 1: kraft tag with string loop */
+  .kraft-tag {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #F4E3BE;
+    border: 1.5px solid #C9A65F;
+    padding: 7px 16px 7px 22px;
+    border-radius: 3px 12px 12px 3px;
+    font-family: 'Kalam', cursive;
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .kraft-tag::before {
+    content: '';
+    position: absolute;
+    left: 8px; top: 50%;
+    width: 7px; height: 7px;
+    border: 1.5px solid #8A6E38;
+    border-radius: 50%;
+    background: #FFF8E7;
+    transform: translateY(-50%);
+  }
+  .kraft-tag .string {
+    position: absolute;
+    left: -14px; top: -10px;
+    width: 22px; height: 20px;
+    border: 1.5px solid #8A6E38;
+    border-radius: 50% 50% 0 0;
+    border-bottom: none;
+    transform: rotate(20deg);
+  }
+
+  /* Direction 2: marker-scrawled sticky label, rotated, torn edge look via irregular border-radius */
+  .scrawl-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #FFF8E7;
+    border: 2px solid #2B1B4D;
+    padding: 6px 14px;
+    border-radius: 2px 14px 4px 12px;
+    font-family: 'Shadows Into Light', cursive;
+    font-size: 17px;
+    box-shadow: 1px 1px 0 #2B1B4D;
+  }
+
+  /* Direction 3: masking tape + handwritten ink, rotated */
+  .tape-tag {
+    position: relative;
+    display: inline-block;
+    background: #FFF8E7;
+    border: 1.5px solid #E0C88A;
+    padding: 8px 18px 8px 22px;
+    border-radius: 2px;
+  }
+  .tape-tag::before {
+    content: '';
+    position: absolute;
+    left: 6px; top: 50%;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #E0C88A;
+    transform: translateY(-50%);
+  }
+  .tape-tag .tape {
+    position: absolute;
+    top: -10px; left: 10px;
+    width: 46px; height: 16px;
+    background: rgba(255,229,153,0.75);
+    border: 1px solid rgba(180,150,60,0.3);
+    transform: rotate(-6deg);
+  }
+  .tape-tag span {
+    font-family: 'Kalam', cursive;
+    font-weight: 400;
+    font-size: 14px;
+    color: #2B1B4D;
+  }
+
+  .apply-block { margin-top: 60px; }
+  .apply-title { font-family: 'Fredoka'; font-size: 15px; margin-bottom: 14px; }
+  .phone-mini { width: 280px; background: #FFF8E7; border: 3px solid #1A1030; border-radius: 20px; padding: 14px; }
+  .mini-tag-logo { width: 22px; height: 22px; background: #FFC53D; border-radius: 6px 6px 6px 2px; transform: rotate(-10deg); display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
+  .mini-tag-logo i { font-size: 12px; color: #2B1B4D; }
+  .listing-card { background: white; border: 2px solid #F0DFC0; border-radius: 12px; padding: 10px; }
+  .listing-card .title { font-family: 'Fredoka'; font-size: 12px; font-weight: 600; margin: 6px 0 3px; }
+  .listing-card .sub { font-size: 10px; color: #8A7A9E; margin-bottom: 8px; }
+  .listing-thumb { width: 100%; aspect-ratio: 16/8; border-radius: 8px; background: #FFEFD1; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Price tag — three directions</h1>
+  <p class="sub">Same idea, three levels of "handwritten." Each tag is randomly rotated a couple degrees so no two sit perfectly straight — that's part of the point.</p>
+
+  <div class="row">
+    <div class="row-label">Direction 1 — kraft tag with string loop</div>
+    <div class="row-desc">An actual manila/kraft-paper tag shape with a drawn string loop through the hole, like it's tied to a table leg. Text in a looser handwritten-marker font (Kalam). Most literal reading of "price tag."</div>
+    <div class="tag-field">
+      <div class="kraft-tag" style="transform: rotate(-4deg);"><div class="string"></div>Live now</div>
+      <div class="kraft-tag" style="transform: rotate(3deg); background:#E3D9F5; border-color:#9F87D9;"><div class="string"></div>42 homes</div>
+      <div class="kraft-tag" style="transform: rotate(-2deg); background:#FFE0D4; border-color:#E08A5F;"><div class="string"></div>New match</div>
+      <div class="kraft-tag" style="transform: rotate(5deg);"><div class="string"></div>Furniture</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="row-label">Direction 2 — marker-scrawled label</div>
+    <div class="row-desc">Bolder, faster, like it was written in Sharpie in five seconds between customers. Thick outline, offset shadow for a slight sticker-peel feel, a genuinely scratchy script font.</div>
+    <div class="tag-field">
+      <div class="scrawl-tag" style="transform: rotate(-3deg);">Live now</div>
+      <div class="scrawl-tag" style="transform: rotate(2deg); border-color:#7B5FD9; box-shadow:1px 1px 0 #7B5FD9;">42 homes</div>
+      <div class="scrawl-tag" style="transform: rotate(-4deg); border-color:#FF6B4A; box-shadow:1px 1px 0 #FF6B4A;">New match</div>
+      <div class="scrawl-tag" style="transform: rotate(4deg);">Furniture</div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="row-label">Direction 3 — masking tape + quiet ink</div>
+    <div class="row-desc">Quietest of the three. A plain paper tag held by a strip of masking tape at an angle, handwriting kept small and calm rather than shouty. Reads more "thoughtful seller" than "loud sale sign."</div>
+    <div class="tag-field">
+      <div class="tape-tag" style="transform: rotate(-3deg);"><div class="tape"></div><span>Live now</span></div>
+      <div class="tape-tag" style="transform: rotate(2deg);"><div class="tape" style="background:rgba(200,190,240,0.6);"></div><span>42 homes</span></div>
+      <div class="tape-tag" style="transform: rotate(-2deg);"><div class="tape" style="background:rgba(255,180,150,0.6);"></div><span>New match</span></div>
+      <div class="tape-tag" style="transform: rotate(3deg);"><div class="tape"></div><span>Furniture</span></div>
+    </div>
+  </div>
+
+  <div class="apply-block">
+    <div class="apply-title">Direction 1 applied to a real card</div>
+    <div class="phone-mini">
+      <div class="mini-tag-logo"><i class="ti ti-map-pin-filled"></i></div>
+      <div class="listing-card">
+        <div class="kraft-tag" style="transform: rotate(-3deg); font-size:11px; padding:5px 12px 5px 18px;"><div class="string" style="width:16px;height:14px;left:-10px;top:-7px;"></div>Live now</div>
+        <div class="listing-thumb" style="margin-top:8px;"><i class="ti ti-photo" style="color:#C98A00;"></i></div>
+        <div class="title">Maple Street moving sale</div>
+        <div class="sub">1.2km &middot; Sat, 9am&ndash;2pm</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
