@@ -87,6 +87,22 @@ const config: ExpoConfig = {
         iosAppId: process.env.EXPO_PUBLIC_ADMOB_IOS_APP_ID,
       },
     ],
+    [
+      'expo-build-properties',
+      {
+        // react-native-google-mobile-ads' Android native dependency
+        // (Google Play Services Ads 25.4.0) ships Kotlin metadata built
+        // with Kotlin 2.3.0 — newer than the 2.1.20 this RN version pins
+        // by default, which fails with "Module was compiled with an
+        // incompatible version of Kotlin" during :compileReleaseKotlin.
+        // Overriding the whole project's Kotlin version is the standard
+        // fix for this (a common mismatch whenever a native SDK like
+        // AdMob/Firebase ships ahead of RN's pinned Kotlin).
+        android: {
+          kotlinVersion: '2.3.0',
+        },
+      },
+    ],
   ],
   experiments: {
     typedRoutes: true,
