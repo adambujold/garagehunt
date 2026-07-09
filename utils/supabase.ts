@@ -32,6 +32,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    // PKCE (rather than the default implicit flow) so Google sign-in
+    // (utils/google-auth.ts) gets back a single ?code= to exchange via
+    // exchangeCodeForSession, instead of having to hand-parse an
+    // access_token/refresh_token pair out of a URL fragment.
+    flowType: 'pkce',
   },
 });
 

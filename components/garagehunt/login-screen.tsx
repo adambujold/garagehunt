@@ -16,17 +16,21 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Fonts } from '@/constants/brand';
+import { getErrorMessage } from '@/utils/get-error-message';
+import { signInWithGoogle } from '@/utils/google-auth';
 import { supabase } from '@/utils/supabase';
 
-// Real Supabase email/password auth. A successful sign-in updates the shared
-// session (see hooks/use-auth-session.ts), which the root layout listens to
-// and swaps into the tab bar automatically — no callback needed here.
-// Apple/Google are visual placeholders only: real social sign-in needs OAuth
-// provider credentials configured in the Supabase dashboard first.
+// Real Supabase email/password and Google auth. A successful sign-in updates
+// the shared session (see hooks/use-auth-session.ts), which the root layout
+// listens to and swaps into the tab bar automatically — no callback needed
+// here either way. Apple is still a visual placeholder — Sign in with Apple
+// needs an Apple Developer Program account, which isn't set up yet; wire it
+// up alongside push notifications later, since both need one.
 export function LoginScreen({ onNavigateToSignUp }: { onNavigateToSignUp: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleSignIn = async () => {
@@ -39,9 +43,21 @@ export function LoginScreen({ onNavigateToSignUp }: { onNavigateToSignUp: () => 
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Something went wrong signing in with Google.'));
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
@@ -52,14 +68,22 @@ export function LoginScreen({ onNavigateToSignUp }: { onNavigateToSignUp: () => 
           <Text style={styles.subtitle}>Sign in to find this weekend&apos;s best sales</Text>
         </View>
 
+        {/* Non-functional until Sign in with Apple is wired up — see the
+            header comment. */}
         <Pressable style={styles.appleButton}>
           <Ionicons name="logo-apple" size={16} color="#fff" />
           <Text style={styles.appleButtonLabel}>Continue with Apple</Text>
         </Pressable>
 
-        <Pressable style={styles.googleButton}>
-          <Ionicons name="logo-google" size={15} color={Colors.coral} />
-          <Text style={styles.googleButtonLabel}>Continue with Google</Text>
+        <Pressable style={styles.googleButton} onPress={handleGoogleSignIn} disabled={googleLoading || loading}>
+          {googleLoading ? (
+            <ActivityIndicator color={Colors.coral} />
+          ) : (
+            <>
+              <Ionicons name="logo-google" size={15} color={Colors.coral} />
+              <Text style={styles.googleButtonLabel}>Continue with Google</Text>
+            </>
+          )}
         </Pressable>
 
         <View style={styles.divider}>
@@ -115,7 +139,7 @@ export function LoginScreen({ onNavigateToSignUp }: { onNavigateToSignUp: () => 
           </View>
         )}
 
-        <Pressable style={styles.signInButton} onPress={handleSignIn} disabled={loading}>
+        <Pressable style={styles.signInButton} onPress={handleSignIn} disabled={loading || googleLoading}>
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (

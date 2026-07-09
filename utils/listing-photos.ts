@@ -67,6 +67,18 @@ export async function uploadListingPhoto(listingId: string, localUri: string, so
   // reads the raw bytes directly and works identically on web and native.
   const arrayBuffer = await new File(localUri).arrayBuffer();
 
+  // File.arrayBuffer() has been observed to silently resolve with a tiny
+  // placeholder (e.g. a ~70-byte 1x1 PNG) instead of throwing when it can't
+  // actually read the picked URI — a real photo is always well over this.
+  // Uploading that "succeeds" and leaves the listing with a photo that
+  // decodes fine but renders as a single stretched-out color block, which is
+  // worse than no photo at all (PhotoGallery's normal empty-state icon).
+  // Catching it here turns a silent corruption into a visible retryable
+  // error via the existing photoError banner on List a Sale / Edit Listing.
+  if (arrayBuffer.byteLength < 1000) {
+    throw new Error('That photo could not be read. Please try again.');
+  }
+
   const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(storageKey, arrayBuffer, {
     contentType,
   });

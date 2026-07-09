@@ -9,6 +9,7 @@ import { DiscoverMap } from '@/components/garagehunt/discover-map';
 import { MockSale, SaleCard } from '@/components/garagehunt/sale-card';
 import { Colors, Fonts } from '@/constants/brand';
 import { useCurrentLocation } from '@/hooks/use-current-location';
+import { goBack } from '@/utils/navigation';
 import { formatDisplayDate } from '@/utils/parse-sale-form-input';
 import { fetchListingsForEvent } from '@/utils/sale-listings';
 import { fetchEventById, TownWideEvent } from '@/utils/town-wide-events';
@@ -57,7 +58,7 @@ export default function EventDetailScreen() {
 
   if (event === undefined) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <View style={styles.stateBox}>
           <ActivityIndicator color={Colors.coral} />
         </View>
@@ -67,16 +68,16 @@ export default function EventDetailScreen() {
 
   if (!event) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <Text style={styles.notFound}>{loadError ?? 'Event not found.'}</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.headerRow}>
-        <Pressable style={styles.iconButton} onPress={() => router.back()}>
+        <Pressable style={styles.iconButton} onPress={() => goBack()}>
           <Ionicons name="chevron-back" size={18} color={Colors.ink} />
         </Pressable>
         <Text style={styles.title} numberOfLines={1}>

@@ -9,6 +9,7 @@ import { MockSale, SaleCard } from '@/components/garagehunt/sale-card';
 import { Colors, Fonts } from '@/constants/brand';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useCurrentLocation } from '@/hooks/use-current-location';
+import { goBack } from '@/utils/navigation';
 import { fetchListingsForEvent } from '@/utils/sale-listings';
 import {
   EventJoinRequest,
@@ -86,7 +87,7 @@ export default function OrganizerEventScreen() {
 
   if (event === undefined) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <View style={styles.stateBox}>
           <ActivityIndicator color={Colors.coral} />
         </View>
@@ -96,16 +97,16 @@ export default function OrganizerEventScreen() {
 
   if (!event) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <Text style={styles.notFound}>{loadError ?? 'Event not found.'}</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.headerRow}>
-        <Pressable style={styles.iconButton} onPress={() => router.back()}>
+        <Pressable style={styles.iconButton} onPress={() => goBack()}>
           <Ionicons name="chevron-back" size={18} color={Colors.ink} />
         </Pressable>
         <Text style={styles.title} numberOfLines={1}>

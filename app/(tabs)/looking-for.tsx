@@ -25,6 +25,7 @@ import { DEFAULT_MAP_REGION } from '@/constants/map';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { getErrorMessage } from '@/utils/get-error-message';
+import { backfillMatchesForSavedSearch } from '@/utils/matches';
 import { formatDisplayDate, parseDisplayDate } from '@/utils/parse-sale-form-input';
 import { fetchMySavedSearch, saveSavedSearch } from '@/utils/saved-searches';
 
@@ -126,10 +127,11 @@ export default function LookingForScreen() {
         longitude: DEFAULT_MAP_REGION.longitude,
       };
 
-      const id = await saveSavedSearch({
+      const keywords = [...mainKeywords, ...otherKeywordItems];
+      const { id, categoryIds } = await saveSavedSearch({
         id: savedSearchId ?? undefined,
         userId: session.user.id,
-        keywords: [...mainKeywords, ...otherKeywordItems],
+        keywords,
         categoryNames: activeCategories,
         centerLatitude: origin.latitude,
         centerLongitude: origin.longitude,
@@ -139,6 +141,17 @@ export default function LookingForScreen() {
         notifyEnabled,
       });
       setSavedSearchId(id);
+      try {
+        // Picks up listings that were already published before this search
+        // existed/changed — see utils/matches.ts's header comment on why
+        // this doesn't happen automatically otherwise.
+        await backfillMatchesForSavedSearch({ searchId: id, keywords, categoryIds });
+      } catch (err) {
+        // Same reasoning as computeAndInsertMatches's own callers — a
+        // side effect of saving, not the save itself, so it shouldn't block
+        // navigating to the (possibly still-accurate) matches screen.
+        console.error('Failed to backfill matches for saved search', err);
+      }
       router.push('/matches-for-you');
     } catch (err) {
       console.error('Failed to save search', err);
@@ -160,7 +173,7 @@ export default function LookingForScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <Text style={styles.title}>I&apos;m looking for</Text>

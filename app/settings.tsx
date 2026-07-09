@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Fonts } from '@/constants/brand';
 import { useAuthSession } from '@/hooks/use-auth-session';
+import { goBack } from '@/utils/navigation';
 import { getNotificationsEnabled, setNotificationsEnabled } from '@/utils/notification-prefs';
 import { supabase } from '@/utils/supabase';
 
@@ -29,9 +30,9 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.headerRow}>
-        <Pressable style={styles.iconButton} onPress={() => router.back()}>
+        <Pressable style={styles.iconButton} onPress={() => goBack()}>
           <Ionicons name="chevron-back" size={18} color={Colors.ink} />
         </Pressable>
         <Text style={styles.title}>Settings</Text>

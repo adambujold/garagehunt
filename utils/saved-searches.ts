@@ -76,7 +76,12 @@ export type SaveSavedSearchInput = {
   notifyEnabled: boolean;
 };
 
-export async function saveSavedSearch(input: SaveSavedSearchInput): Promise<string> {
+export type SavedSearchSaveResult = {
+  id: string;
+  categoryIds: string[];
+};
+
+export async function saveSavedSearch(input: SaveSavedSearchInput): Promise<SavedSearchSaveResult> {
   let categoryIds: string[] = [];
   if (input.categoryNames.length > 0) {
     const { data: categoryRows, error: categoryError } = await supabase
@@ -102,10 +107,10 @@ export async function saveSavedSearch(input: SaveSavedSearchInput): Promise<stri
   if (input.id) {
     const { error } = await supabase.from('saved_searches').update(payload).eq('id', input.id);
     if (error) throw error;
-    return input.id;
+    return { id: input.id, categoryIds };
   }
 
   const { data, error } = await supabase.from('saved_searches').insert(payload).select('id').single();
   if (error) throw error;
-  return data.id;
+  return { id: data.id, categoryIds };
 }

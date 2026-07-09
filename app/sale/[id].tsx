@@ -16,6 +16,7 @@ import { checkIn, isCheckedIn, isWithinCheckInRange } from '@/utils/check-ins';
 import { addFavorite, isListingFavorited, removeFavorite } from '@/utils/favorites';
 import { formatSaleSchedule } from '@/utils/format-sale-schedule';
 import { deriveHotTier, HOT_TIER_LABELS } from '@/utils/hot-tier';
+import { goBack } from '@/utils/navigation';
 import { fetchSaleListingById } from '@/utils/sale-listings';
 
 export default function SaleDetailScreen() {
@@ -174,7 +175,7 @@ export default function SaleDetailScreen() {
 
   if (sale === undefined) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <View style={styles.stateBox}>
           <ActivityIndicator color={Colors.coral} />
         </View>
@@ -184,7 +185,7 @@ export default function SaleDetailScreen() {
 
   if (!sale) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <Text style={styles.notFound}>{loadError ?? 'Sale not found.'}</Text>
       </SafeAreaView>
     );
@@ -202,9 +203,9 @@ export default function SaleDetailScreen() {
   const showCheckInButton = !isMockListing && isLive && withinCheckInRange && !isCheckedInHere;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.topBar}>
-        <Pressable style={styles.iconButton} onPress={() => router.back()}>
+        <Pressable style={styles.iconButton} onPress={() => goBack()}>
           <Ionicons name="chevron-back" size={18} color={Colors.ink} />
         </Pressable>
         <View style={styles.topBarActions}>

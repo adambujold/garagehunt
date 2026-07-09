@@ -175,7 +175,7 @@ type DbJoinRequestRow = {
   listing_id: string;
   status: 'pending' | 'approved' | 'denied';
   created_at: string;
-  sale_listings: { address_text: string } | null;
+  sale_listings: { address_text: string; title: string | null } | null;
 };
 
 export async function submitEventJoinRequest(input: {
@@ -194,7 +194,7 @@ export async function submitEventJoinRequest(input: {
 export async function fetchJoinRequestsForEvent(eventId: string): Promise<EventJoinRequest[]> {
   const { data, error } = await supabase
     .from('event_join_requests')
-    .select('id, listing_id, status, created_at, sale_listings(address_text)')
+    .select('id, listing_id, status, created_at, sale_listings(address_text, title)')
     .eq('event_id', eventId)
     .order('created_at', { ascending: false });
 
@@ -203,7 +203,9 @@ export async function fetchJoinRequestsForEvent(eventId: string): Promise<EventJ
   return ((data ?? []) as unknown as DbJoinRequestRow[]).map((row) => ({
     id: row.id,
     listingId: row.listing_id,
-    listingTitle: row.sale_listings ? deriveTitle(row.sale_listings.address_text) : 'Listing',
+    listingTitle: row.sale_listings
+      ? row.sale_listings.title ?? deriveTitle(row.sale_listings.address_text)
+      : 'Listing',
     listingAddress: row.sale_listings?.address_text ?? '',
     status: row.status,
     createdAt: row.created_at,
@@ -216,4 +218,42 @@ export async function updateEventJoinRequestStatus(
 ): Promise<void> {
   const { error } = await supabase.from('event_join_requests').update({ status }).eq('id', requestId);
   if (error) throw error;
+}
+
+// An organizer-initiated invitation for a specific listing — surfaced on
+// Edit Listing (see 0015_cluster_suggestions.sql's initiated_by column):
+// unlike the seller-initiated "request to join" flow in List a Sale, this
+// is something the seller didn't ask for and needs to actively accept or
+// decline, via updateEventJoinRequestStatus above (the same function works
+// for both flows — RLS is what distinguishes who's allowed to call it).
+export type PendingInvitation = {
+  id: string;
+  eventId: string;
+  eventName: string;
+};
+
+type DbPendingInvitationRow = {
+  id: string;
+  event_id: string;
+  town_wide_events: { name: string } | null;
+};
+
+export async function fetchPendingInvitationForListing(listingId: string): Promise<PendingInvitation | null> {
+  const { data, error } = await supabase
+    .from('event_join_requests')
+    .select('id, event_id, town_wide_events(name)')
+    .eq('listing_id', listingId)
+    .eq('initiated_by', 'organizer')
+    .eq('status', 'pending')
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as unknown as DbPendingInvitationRow;
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    eventName: row.town_wide_events?.name ?? 'a nearby event',
+  };
 }

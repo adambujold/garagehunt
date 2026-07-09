@@ -81,7 +81,7 @@ export function ReviewPromptModal({
 
   return (
     <Modal transparent animationType="fade" visible statusBarTranslucent>
-      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.backdrop}>
           {/* The dismiss-on-tap-outside catcher sits BEHIND the card as a
               sibling, not as a wrapper around it — wrapping the card (and

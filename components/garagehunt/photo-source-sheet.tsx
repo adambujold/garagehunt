@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Modal, Pressable, StyleSheet, Text, TouchableWithoutFeedback, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors, Fonts } from '@/constants/brand';
 
@@ -19,6 +20,8 @@ export function PhotoSourceSheet({
   onChooseFromLibrary: () => void;
   onCancel: () => void;
 }) {
+  const insets = useSafeAreaInsets();
+
   if (!visible) return null;
 
   return (
@@ -26,7 +29,7 @@ export function PhotoSourceSheet({
       <TouchableWithoutFeedback onPress={onCancel} accessible={false}>
         <View style={styles.backdrop}>
           <TouchableWithoutFeedback accessible={false}>
-            <View style={styles.sheet}>
+            <View style={[styles.sheet, { paddingBottom: 28 + insets.bottom }]}>
               <Pressable style={styles.option} onPress={onTakePhoto}>
                 <Ionicons name="camera-outline" size={18} color={Colors.ink} />
                 <Text style={styles.optionLabel}>Take Photo</Text>
@@ -58,7 +61,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     paddingTop: 8,
-    paddingBottom: 28,
     paddingHorizontal: 16,
   },
   option: {

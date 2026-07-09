@@ -97,7 +97,10 @@ export function SaleCard({ sale, isNew = false }: { sale: MockSale; isNew?: bool
         </Text>
         <View style={styles.footerRow}>
           <PriceTag label={sale.tagLabel} variant={sale.tagVariant} rotate={-2} />
-          <Text style={styles.categories}>{sale.categories.join(' · ')}</Text>
+          {sale.eventId !== null && <PriceTag label="Community sale" variant="town" rotate={-2} />}
+          <Text style={styles.categories} numberOfLines={2}>
+            {sale.categories.join(' · ')}
+          </Text>
         </View>
         {sale.sellerReviewCount > 0 && (
           <Text style={styles.ratingText}>
@@ -172,10 +175,13 @@ const styles = StyleSheet.create({
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 6,
     marginTop: 2,
   },
   categories: {
+    flex: 1,
+    flexShrink: 1,
     fontFamily: Fonts.body,
     fontSize: 10,
     color: Colors.muted,

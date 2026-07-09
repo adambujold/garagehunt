@@ -78,3 +78,69 @@ export async function computeAndInsertMatches(listing: ListingForMatching): Prom
     typeof insertError === 'object' && insertError !== null && 'code' in insertError && insertError.code === '23505';
   if (insertError && !isDuplicate) throw insertError;
 }
+
+type CandidateListing = {
+  id: string;
+  description: string | null;
+  other_items: string[] | null;
+  category_ids: string[] | null;
+};
+
+// The other direction of computeAndInsertMatches above — called right after
+// a search is saved (create or edit), so it also picks up listings that were
+// already published before the search existed. Without this, a saved search
+// only ever matched listings published after it (see
+// supabase/migrations/0017_backfill_matches_for_saved_search.sql for the
+// root-cause note), which silently looked "broken" any time a search was
+// saved second. Safe to call on every save, not just the first — it only
+// inserts matches that aren't already recorded (see below).
+export async function backfillMatchesForSavedSearch(input: {
+  searchId: string;
+  keywords: string[];
+  categoryIds: string[];
+}): Promise<void> {
+  const { data, error } = await supabase.rpc('candidate_listings_for_saved_search', {
+    p_search_id: input.searchId,
+  });
+  if (error) throw error;
+
+  const candidates = (data ?? []) as CandidateListing[];
+  const matchedListingIds = candidates
+    .filter((listing) => {
+      const categoryIds = listing.category_ids ?? [];
+      const categoryOverlap = categoryIds.some((id) => input.categoryIds.includes(id));
+      const keywordOverlap = input.keywords.some((keyword) =>
+        matchesOtherKeyword(
+          { description: listing.description ?? '', otherItems: listing.other_items ?? [] },
+          keyword
+        )
+      );
+      return categoryOverlap || keywordOverlap;
+    })
+    .map((listing) => listing.id);
+
+  if (matchedListingIds.length === 0) return;
+
+  // Unlike computeAndInsertMatches (always a brand-new listing_id, so a
+  // duplicate-key conflict is a rare edge case worth just swallowing), this
+  // runs on every save of the same search — a second save routinely
+  // re-matches listings already recorded from the first. A single bulk
+  // .insert() is all-or-nothing, so one already-matched row in the batch
+  // would reject the whole statement, including the genuinely new rows.
+  // Filtering to only the not-yet-recorded listing ids first avoids that.
+  const { data: existing, error: existingError } = await supabase
+    .from('matches')
+    .select('listing_id')
+    .eq('saved_search_id', input.searchId)
+    .in('listing_id', matchedListingIds);
+  if (existingError) throw existingError;
+
+  const alreadyMatchedIds = new Set((existing ?? []).map((row) => row.listing_id));
+  const newListingIds = matchedListingIds.filter((id) => !alreadyMatchedIds.has(id));
+  if (newListingIds.length === 0) return;
+
+  const { error: insertError } = await supabase.from('matches').insert(
+    newListingIds.map((listingId) => ({ saved_search_id: input.searchId, listing_id: listingId }))
+  );
+  if (insertError) throw insertError;
+}

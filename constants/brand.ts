@@ -25,6 +25,13 @@ export const Colors = {
   mutedDark: '#5B4A7A',
   mutedLight: '#B8A8CC',
   interestPink: '#D4537E',
+  // Discover feed's "Sponsored" ad card (garagehunt-brand-identity.html's
+  // .ad-card/.ad-label) — deliberately its own muted palette, not reused
+  // from anywhere else, so a sponsored placement never reads as a real
+  // listing at a glance.
+  adCardBg: '#FBF6EA',
+  adLabelBg: '#F0E4C8',
+  adLabelText: '#A88A55',
 } as const;
 
 export const Fonts = {

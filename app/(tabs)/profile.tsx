@@ -14,6 +14,7 @@ import { Colors, Fonts, SHOPPER_TIER_THRESHOLDS } from '@/constants/brand';
 import { MOCK_SALES } from '@/constants/mock-data';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { fetchBuyerCheckinCount } from '@/utils/check-ins';
+import { ClusterSuggestion, fetchActiveClusterForUser } from '@/utils/cluster-suggestions';
 import {
   fetchIsVerifiedOrganizer,
   fetchLatestOrganizerApplication,
@@ -73,6 +74,7 @@ export default function ProfileScreen() {
   const [isVerifiedOrganizer, setIsVerifiedOrganizer] = useState(false);
   const [showApprovalBanner, setShowApprovalBanner] = useState(false);
   const [showTierInfo, setShowTierInfo] = useState(false);
+  const [activeCluster, setActiveCluster] = useState<ClusterSuggestion | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -107,6 +109,11 @@ export default function ProfileScreen() {
           }
         })
         .catch((err) => console.error('Failed to check organizer application status', err));
+      fetchActiveClusterForUser()
+        .then((cluster) => {
+          if (!cancelled) setActiveCluster(cluster);
+        })
+        .catch((err) => console.error('Failed to check for a nearby cluster suggestion', err));
       return () => {
         cancelled = true;
       };
@@ -174,23 +181,27 @@ export default function ProfileScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.nudgeCard}>
-          <View style={styles.nudgeAvatarRow}>
-            <View style={[styles.nudgeAvatar, { zIndex: 1 }]}>
-              <Text style={styles.nudgeAvatarLabel}>RP</Text>
+        {activeCluster && (
+          <View style={styles.nudgeCard}>
+            <View style={styles.nudgeAvatarRow}>
+              <View style={styles.nudgeAvatar}>
+                <Ionicons name="people" size={14} color={Colors.amberText} />
+              </View>
             </View>
-            <View style={[styles.nudgeAvatar, styles.nudgeAvatarOverlap]}>
-              <Text style={styles.nudgeAvatarLabel}>SL</Text>
-            </View>
+            <Text style={styles.nudgeTitle}>
+              {activeCluster.listingIds.length - 1} neighbor
+              {activeCluster.listingIds.length - 1 === 1 ? '' : 's'} planning sales nearby
+            </Text>
+            <Text style={styles.nudgeSubtitle}>
+              Team up for the same weekend and everyone gets more traffic.
+            </Text>
+            <Pressable
+              style={styles.nudgeButton}
+              onPress={() => router.push({ pathname: '/cluster-claim/[id]', params: { id: activeCluster.id } })}>
+              <Text style={styles.nudgeButtonLabel}>See who&apos;s selling nearby</Text>
+            </Pressable>
           </View>
-          <Text style={styles.nudgeTitle}>2 neighbors planning sales nearby</Text>
-          <Text style={styles.nudgeSubtitle}>
-            Team up for the same weekend and everyone gets more traffic.
-          </Text>
-          <Pressable style={styles.nudgeButton}>
-            <Text style={styles.nudgeButtonLabel}>See who&apos;s selling nearby</Text>
-          </Pressable>
-        </View>
+        )}
 
         <Text style={styles.sectionTitle}>My sales</Text>
         <ScrollView
@@ -340,14 +351,6 @@ const styles = StyleSheet.create({
     borderColor: Colors.lavender,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  nudgeAvatarOverlap: {
-    marginLeft: -10,
-  },
-  nudgeAvatarLabel: {
-    fontFamily: Fonts.displaySemiBold,
-    fontSize: 10,
-    color: Colors.amberText,
   },
   nudgeTitle: {
     fontFamily: Fonts.displaySemiBold,

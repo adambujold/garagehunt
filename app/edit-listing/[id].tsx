@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AiSuggestionModal } from '@/components/garagehunt/ai-suggestion-modal';
 import { Chip } from '@/components/garagehunt/chip';
 import { OtherCategoryField } from '@/components/garagehunt/other-category-field';
 import { PhotoSourceSheet } from '@/components/garagehunt/photo-source-sheet';
@@ -32,6 +33,7 @@ import {
   MAX_LISTING_PHOTOS,
   uploadListingPhoto,
 } from '@/utils/listing-photos';
+import { goBack } from '@/utils/navigation';
 import { formatDisplayDate, parseDisplayDate } from '@/utils/parse-sale-form-input';
 import { pickListingPhoto, takeListingPhoto } from '@/utils/pick-listing-photo';
 import {
@@ -40,6 +42,11 @@ import {
   fetchEditableListing,
   updateSaleListing,
 } from '@/utils/sale-listings';
+import {
+  fetchPendingInvitationForListing,
+  PendingInvitation,
+  updateEventJoinRequestStatus,
+} from '@/utils/town-wide-events';
 
 export default function EditListingScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -51,8 +58,10 @@ export default function EditListingScreen() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
+  const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [otherItems, setOtherItems] = useState<string[]>([]);
+  const [aiModalVisible, setAiModalVisible] = useState(false);
   // Unlike List a Sale, this listing already has a real id — photos upload
   // (and delete) immediately on pick rather than being deferred to a save
   // action.
@@ -66,6 +75,13 @@ export default function EditListingScreen() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+
+  // An invitation an organizer sent this listing after claiming a nearby
+  // cluster (see 0015_cluster_suggestions.sql) — distinct from the
+  // seller-initiated "request to join" flow in List a Sale, which doesn't
+  // apply here since this listing already exists.
+  const [invitation, setInvitation] = useState<PendingInvitation | null>(null);
+  const [respondingToInvitation, setRespondingToInvitation] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -81,6 +97,7 @@ export default function EditListingScreen() {
             setStartDate(formatDisplayDate(result.startDate));
             setEndDate(formatDisplayDate(result.endDate));
             setCategories(result.categoryNames);
+            setTitle(result.title ?? '');
             setDescription(result.description);
             setOtherItems(result.otherItems);
             fetchListingPhotos(result.id)
@@ -88,6 +105,11 @@ export default function EditListingScreen() {
                 if (!cancelledEffect) setPhotos(fetchedPhotos);
               })
               .catch((err) => console.error('Failed to load listing photos', err));
+            fetchPendingInvitationForListing(result.id)
+              .then((invitationResult) => {
+                if (!cancelledEffect) setInvitation(invitationResult);
+              })
+              .catch((err) => console.error('Failed to check for a pending event invitation', err));
           }
         })
         .catch((err) => {
@@ -119,6 +141,19 @@ export default function EditListingScreen() {
 
   const removeOtherItem = (index: number) => {
     setOtherItems((current) => current.filter((_, i) => i !== index));
+  };
+
+  const handleRespondToInvitation = async (status: 'approved' | 'denied') => {
+    if (!invitation || respondingToInvitation) return;
+    setRespondingToInvitation(true);
+    try {
+      await updateEventJoinRequestStatus(invitation.id, status);
+      setInvitation(null);
+    } catch (err) {
+      console.error('Failed to respond to event invitation', err);
+    } finally {
+      setRespondingToInvitation(false);
+    }
   };
 
   const handleAddPhoto = () => {
@@ -176,12 +211,13 @@ export default function EditListingScreen() {
         id: listing.id,
         startDate: startDateIso,
         endDate: endDateIso,
+        title,
         description,
         otherItems,
         categoryNames: categories,
         publish: listing.status === 'draft',
       });
-      router.back();
+      goBack();
     } catch (err) {
       console.error('Failed to save listing changes', err);
       setSaveError(getErrorMessage(err, 'Something went wrong saving your changes.'));
@@ -195,7 +231,7 @@ export default function EditListingScreen() {
     setCancelling(true);
     try {
       await cancelSaleListing(listing.id);
-      router.back();
+      goBack();
     } catch (err) {
       console.error('Failed to cancel listing', err);
       setSaveError(getErrorMessage(err, 'Something went wrong cancelling this sale.'));
@@ -206,7 +242,7 @@ export default function EditListingScreen() {
 
   if (listing === undefined) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <View style={styles.stateBox}>
           <ActivityIndicator color={Colors.coral} />
         </View>
@@ -216,9 +252,9 @@ export default function EditListingScreen() {
 
   if (!listing) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <View style={styles.topBar}>
-          <Pressable style={styles.iconButton} onPress={() => router.back()}>
+          <Pressable style={styles.iconButton} onPress={() => goBack()}>
             <Ionicons name="chevron-back" size={18} color={Colors.ink} />
           </Pressable>
           <Text style={styles.topBarTitle}>Edit listing</Text>
@@ -236,9 +272,9 @@ export default function EditListingScreen() {
   const isCancelled = listing.status === 'cancelled';
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.topBar}>
-        <Pressable style={styles.iconButton} onPress={() => router.back()}>
+        <Pressable style={styles.iconButton} onPress={() => goBack()}>
           <Ionicons name="chevron-back" size={18} color={Colors.ink} />
         </Pressable>
         <Text style={styles.topBarTitle}>Edit listing</Text>
@@ -251,12 +287,41 @@ export default function EditListingScreen() {
           <Text style={styles.stateText}>This sale has been cancelled and can no longer be edited.</Text>
         </View>
       ) : (
-        <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <ScrollView
             style={styles.flexFill}
             contentContainerStyle={styles.content}
             keyboardShouldPersistTaps="handled">
+            {invitation && (
+              <View style={styles.invitationCard}>
+                <View style={styles.invitationRow}>
+                  <Ionicons name="people-outline" size={16} color={Colors.violet} />
+                  <Text style={styles.invitationText}>
+                    You&apos;ve been invited to join <Text style={styles.invitationEventName}>{invitation.eventName}</Text>
+                  </Text>
+                </View>
+                <View style={styles.buttonRow}>
+                  <Pressable
+                    style={styles.secondaryButton}
+                    onPress={() => handleRespondToInvitation('denied')}
+                    disabled={respondingToInvitation}>
+                    <Text style={styles.secondaryButtonLabel}>Decline</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.primaryInviteButton}
+                    onPress={() => handleRespondToInvitation('approved')}
+                    disabled={respondingToInvitation}>
+                    {respondingToInvitation ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <Text style={styles.primaryButtonLabel}>Accept</Text>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            )}
+
             <Text style={styles.fieldLabel}>
               Photos ({photos.length}/{MAX_LISTING_PHOTOS})
             </Text>
@@ -344,6 +409,21 @@ export default function EditListingScreen() {
               />
             )}
 
+            <Pressable style={styles.aiSuggestButton} onPress={() => setAiModalVisible(true)}>
+              <Text style={styles.aiSuggestButtonLabel}>✨ Get AI suggestions</Text>
+            </Pressable>
+
+            <Text style={styles.fieldLabel}>Title (optional)</Text>
+            <View style={styles.field}>
+              <TextInput
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Auto-generated from your address if left blank"
+                placeholderTextColor={Colors.mutedLight}
+                style={styles.fieldInput}
+              />
+            </View>
+
             <Text style={styles.fieldLabel}>Description</Text>
             <TextInput
               value={description}
@@ -408,6 +488,17 @@ export default function EditListingScreen() {
         onTakePhoto={() => runPhotoPicker(takeListingPhoto)}
         onChooseFromLibrary={() => runPhotoPicker(pickListingPhoto)}
         onCancel={() => setPhotoSourceSheetVisible(false)}
+      />
+
+      <AiSuggestionModal
+        visible={aiModalVisible}
+        categories={categories}
+        otherItems={otherItems}
+        onAccept={(suggestedTitle, suggestedDescription) => {
+          setTitle(suggestedTitle);
+          setDescription(suggestedDescription);
+        }}
+        onClose={() => setAiModalVisible(false)}
       />
     </SafeAreaView>
   );
@@ -565,6 +656,70 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.ink,
     textAlignVertical: 'top',
+  },
+  aiSuggestButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.lavender,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+  },
+  aiSuggestButtonLabel: {
+    fontFamily: Fonts.displaySemiBold,
+    fontSize: 12,
+    color: Colors.violet,
+  },
+  invitationCard: {
+    backgroundColor: Colors.lavender,
+    borderWidth: 2,
+    borderColor: Colors.violetBorder,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 18,
+  },
+  invitationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  invitationText: {
+    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    color: Colors.ink,
+    lineHeight: 17,
+  },
+  invitationEventName: {
+    fontFamily: Fonts.displaySemiBold,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  secondaryButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: Colors.tan,
+    borderRadius: 12,
+    paddingVertical: 10,
+  },
+  secondaryButtonLabel: {
+    fontFamily: Fonts.displaySemiBold,
+    fontSize: 12,
+    color: Colors.mutedDark,
+  },
+  primaryInviteButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.violet,
+    borderRadius: 12,
+    paddingVertical: 10,
   },
   warningBanner: {
     flexDirection: 'row',

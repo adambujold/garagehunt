@@ -14,6 +14,7 @@ import {
   giveBuyerThumbsUp,
   ListingReview,
 } from '@/utils/check-ins';
+import { goBack } from '@/utils/navigation';
 import { fetchSaleListingById } from '@/utils/sale-listings';
 
 export default function ListingBuyersScreen() {
@@ -82,9 +83,9 @@ export default function ListingBuyersScreen() {
   const checkedInBuyerIds = new Set((buyers ?? []).map((buyer) => buyer.buyerId));
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.headerRow}>
-        <Pressable style={styles.iconButton} onPress={() => router.back()}>
+        <Pressable style={styles.iconButton} onPress={() => goBack()}>
           <Ionicons name="chevron-back" size={18} color={Colors.ink} />
         </Pressable>
         <View style={styles.headerTextBlock}>

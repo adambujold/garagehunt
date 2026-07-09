@@ -16,12 +16,15 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Fonts } from '@/constants/brand';
+import { getErrorMessage } from '@/utils/get-error-message';
+import { signInWithGoogle } from '@/utils/google-auth';
 import { supabase } from '@/utils/supabase';
 
-// Real Supabase email/password auth. display_name is stored in the auth
-// user's metadata for now — syncing it into a dedicated `users` profile
-// table (per the technical architecture doc) is a follow-up once that table
-// exists. Apple/Google are visual placeholders only (see login-screen.tsx).
+// Real Supabase email/password and Google auth. display_name is stored in
+// the auth user's metadata for now — syncing it into a dedicated `users`
+// profile table (per the technical architecture doc) is a follow-up once
+// that table exists. Apple is still a visual placeholder — see
+// login-screen.tsx's header comment for why.
 export function SignUpScreen({
   onNavigateToLogin,
 }: {
@@ -31,6 +34,7 @@ export function SignUpScreen({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
@@ -53,9 +57,22 @@ export function SignUpScreen({
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setInfoMessage(null);
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Something went wrong signing in with Google.'));
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
@@ -66,14 +83,22 @@ export function SignUpScreen({
           <Text style={styles.subtitle}>Sign up to start discovering sales near you</Text>
         </View>
 
+        {/* Non-functional until Sign in with Apple is wired up — see the
+            header comment. */}
         <Pressable style={styles.appleButton}>
           <Ionicons name="logo-apple" size={16} color="#fff" />
           <Text style={styles.appleButtonLabel}>Continue with Apple</Text>
         </Pressable>
 
-        <Pressable style={styles.googleButton}>
-          <Ionicons name="logo-google" size={15} color={Colors.coral} />
-          <Text style={styles.googleButtonLabel}>Continue with Google</Text>
+        <Pressable style={styles.googleButton} onPress={handleGoogleSignIn} disabled={googleLoading || loading}>
+          {googleLoading ? (
+            <ActivityIndicator color={Colors.coral} />
+          ) : (
+            <>
+              <Ionicons name="logo-google" size={15} color={Colors.coral} />
+              <Text style={styles.googleButtonLabel}>Continue with Google</Text>
+            </>
+          )}
         </Pressable>
 
         <View style={styles.divider}>
@@ -143,7 +168,7 @@ export function SignUpScreen({
           </View>
         )}
 
-        <Pressable style={styles.signUpButton} onPress={handleCreateAccount} disabled={loading}>
+        <Pressable style={styles.signUpButton} onPress={handleCreateAccount} disabled={loading || googleLoading}>
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (

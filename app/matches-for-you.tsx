@@ -10,6 +10,7 @@ import { Colors, Fonts } from '@/constants/brand';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { fetchMatches, MatchedListing } from '@/utils/fetch-matches';
+import { goBack } from '@/utils/navigation';
 import { fetchMySavedSearch, SavedSearch } from '@/utils/saved-searches';
 
 function buildSearchSummary(search: SavedSearch): string {
@@ -67,7 +68,7 @@ export default function MatchesForYouScreen() {
   const header = (
     <View>
       <View style={styles.topBar}>
-        <Pressable style={styles.iconButton} onPress={() => router.back()}>
+        <Pressable style={styles.iconButton} onPress={() => goBack()}>
           <Ionicons name="chevron-back" size={18} color={Colors.ink} />
         </Pressable>
         <Text style={styles.topBarTitle}>Matches for you</Text>
@@ -89,7 +90,7 @@ export default function MatchesForYouScreen() {
 
   if (savedSearch === undefined || matches === null) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         {header}
         <View style={styles.stateBox}>
           <ActivityIndicator color={Colors.coral} />
@@ -100,7 +101,7 @@ export default function MatchesForYouScreen() {
 
   if (loadError) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         {header}
         <View style={styles.stateBox}>
           <Ionicons name="warning-outline" size={20} color={Colors.amberText} />
@@ -112,7 +113,7 @@ export default function MatchesForYouScreen() {
 
   if (!savedSearch) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         {header}
         <View style={styles.stateBox}>
           <Text style={styles.stateText}>You haven&apos;t saved a search yet.</Text>
@@ -125,7 +126,7 @@ export default function MatchesForYouScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <FlatList<MockSale & { matchedAt: string; isNew: boolean }>
         style={styles.list}
         contentContainerStyle={styles.listContent}

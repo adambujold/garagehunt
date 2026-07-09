@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AiSuggestionModal } from '@/components/garagehunt/ai-suggestion-modal';
 import { Chip } from '@/components/garagehunt/chip';
 import { OtherCategoryField } from '@/components/garagehunt/other-category-field';
 import { PhotoSourceSheet } from '@/components/garagehunt/photo-source-sheet';
@@ -70,10 +71,12 @@ export default function ListSaleScreen() {
   const [photoSourceSheetVisible, setPhotoSourceSheetVisible] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>(['Furniture']);
+  const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   // Mirrors sale_listings.other_items — a discrete tag list, not appended
   // into description, per the technical architecture doc.
   const [otherItems, setOtherItems] = useState<string[]>([]);
+  const [aiModalVisible, setAiModalVisible] = useState(false);
 
   const [joinEventStatus, setJoinEventStatus] = useState<JoinEventStatus>('undecided');
   // undefined = hasn't checked yet (or still checking), null = checked and
@@ -206,6 +209,7 @@ export default function ListSaleScreen() {
     setPhotos([]);
     setPhotoError(null);
     setCategories(['Furniture']);
+    setTitle('');
     setDescription('');
     setOtherItems([]);
     setJoinEventStatus('undecided');
@@ -239,6 +243,7 @@ export default function ListSaleScreen() {
         endDate: endDateIso,
         dailyStartTime: startTime,
         dailyEndTime: endTime,
+        title,
         description,
         otherItems,
         categoryNames: categories,
@@ -293,6 +298,7 @@ export default function ListSaleScreen() {
         endDate: endDateIso,
         dailyStartTime: startTime,
         dailyEndTime: endTime,
+        title,
         description,
         otherItems,
         categoryNames: categories,
@@ -373,7 +379,10 @@ export default function ListSaleScreen() {
             style={styles.doneButton}
             onPress={() => {
               resetForm();
-              router.replace('/my-listings');
+              // push, not replace — replace wiped this screen out of the
+              // history, so My Listings' back button had nowhere to go and
+              // crashed with "GO_BACK was not handled by any navigator".
+              router.push('/my-listings');
             }}>
             <Text style={styles.doneButtonLabel}>Go to My Listings</Text>
           </Pressable>
@@ -394,7 +403,7 @@ export default function ListSaleScreen() {
         ))}
       </View>
 
-      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <ScrollView
         style={styles.flexFill}
@@ -514,6 +523,21 @@ export default function ListSaleScreen() {
                 onRemoveItem={removeOtherItem}
               />
             )}
+
+            <Pressable style={styles.aiSuggestButton} onPress={() => setAiModalVisible(true)}>
+              <Text style={styles.aiSuggestButtonLabel}>✨ Get AI suggestions</Text>
+            </Pressable>
+
+            <Text style={styles.fieldLabel}>Title (optional)</Text>
+            <View style={styles.field}>
+              <TextInput
+                value={title}
+                onChangeText={setTitle}
+                placeholder="Auto-generated from your address if left blank"
+                placeholderTextColor={Colors.mutedLight}
+                style={styles.fieldInput}
+              />
+            </View>
 
             <Text style={styles.fieldLabel}>Description</Text>
             <TextInput
@@ -685,6 +709,17 @@ export default function ListSaleScreen() {
         onTakePhoto={() => runPhotoPicker(takeListingPhoto)}
         onChooseFromLibrary={() => runPhotoPicker(pickListingPhoto)}
         onCancel={() => setPhotoSourceSheetVisible(false)}
+      />
+
+      <AiSuggestionModal
+        visible={aiModalVisible}
+        categories={categories}
+        otherItems={otherItems}
+        onAccept={(suggestedTitle, suggestedDescription) => {
+          setTitle(suggestedTitle);
+          setDescription(suggestedDescription);
+        }}
+        onClose={() => setAiModalVisible(false)}
       />
     </SafeAreaView>
   );
@@ -875,6 +910,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.ink,
     textAlignVertical: 'top',
+  },
+  aiSuggestButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: Colors.lavender,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+  },
+  aiSuggestButtonLabel: {
+    fontFamily: Fonts.displaySemiBold,
+    fontSize: 12,
+    color: Colors.violet,
   },
   stepCenterBox: {
     alignItems: 'center',

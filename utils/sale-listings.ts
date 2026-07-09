@@ -1,6 +1,7 @@
 import { MockSale } from '@/components/garagehunt/sale-card';
 import { PriceTagVariant } from '@/constants/brand';
 import { Coordinates } from '@/hooks/use-current-location';
+import { detectClusterForListing } from '@/utils/cluster-suggestions';
 import { formatSaleSchedule } from '@/utils/format-sale-schedule';
 import { getListingPhotoUrl } from '@/utils/listing-photos';
 import { computeAndInsertMatches } from '@/utils/matches';
@@ -56,6 +57,7 @@ export type DbSaleListingRow = {
   daily_start_time: string;
   daily_end_time: string;
   status: SaleStatus;
+  title: string | null;
   description: string | null;
   other_items: string[];
   favorite_count: number;
@@ -67,7 +69,7 @@ export type DbSaleListingRow = {
 
 export const LISTING_SELECT = `
   id, seller_id, latitude, longitude, address_text, start_date, end_date,
-  daily_start_time, daily_end_time, status, description, other_items,
+  daily_start_time, daily_end_time, status, title, description, other_items,
   favorite_count, checkin_count, event_id, listing_categories(categories(name)),
   listing_photos(storage_key, sort_order)
 `;
@@ -102,9 +104,9 @@ function statusToTag(
   return displayStatusToTag(deriveDisplayStatus(status, startDate, endDate));
 }
 
-// No title field exists on sale_listings (per the architecture doc) and the
-// form doesn't collect one — derive a plain, honest display title from the
-// address rather than fabricating detail that isn't there.
+// Fallback for listings without a seller-chosen or AI-suggested title (the
+// nullable sale_listings.title column) — derive a plain, honest display
+// title from the address rather than leaving it blank.
 export function deriveTitle(addressText: string): string {
   const firstSegment = addressText.split(',')[0]?.trim() || addressText;
   const streetName = firstSegment.replace(/^\d+\s+/, '');
@@ -123,7 +125,7 @@ export function mapRowToSaleView(row: DbSaleListingRow, origin: Coordinates | nu
   return {
     id: row.id,
     sellerId: row.seller_id,
-    title: deriveTitle(row.address_text),
+    title: row.title ?? deriveTitle(row.address_text),
     distanceKm,
     latitude: row.latitude,
     longitude: row.longitude,
@@ -198,6 +200,19 @@ export async function fetchListingsForEvent(eventId: string, origin: Coordinates
   return attachSellerRatings(sales);
 }
 
+// The cluster-claim screen's "other listings in this cluster" list — title
+// and distance only (no address_text rendered by MockSale's consumers here),
+// consistent with the privacy level already used elsewhere for
+// not-yet-favorited/unrelated listings.
+export async function fetchListingsByIds(ids: string[], origin: Coordinates | null): Promise<MockSale[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase.from('sale_listings').select(LISTING_SELECT).in('id', ids);
+
+  if (error) throw error;
+  const sales = ((data ?? []) as unknown as DbSaleListingRow[]).map((row) => mapRowToSaleView(row, origin));
+  return attachSellerRatings(sales);
+}
+
 export async function fetchSaleListingById(
   id: string,
   origin: Coordinates | null
@@ -224,6 +239,7 @@ export type CreateSaleListingInput = {
   endDate: string;
   dailyStartTime: string;
   dailyEndTime: string;
+  title?: string;
   description: string;
   otherItems: string[];
   categoryNames: string[];
@@ -251,6 +267,7 @@ export async function createSaleListing(input: CreateSaleListingInput): Promise<
       daily_start_time: input.dailyStartTime,
       daily_end_time: input.dailyEndTime,
       status: input.status,
+      title: input.title?.trim() ? input.title.trim() : null,
       description: input.description || null,
       other_items: input.otherItems,
     })
@@ -298,6 +315,11 @@ export async function createSaleListing(input: CreateSaleListingInput): Promise<
       // either.
       console.error('Failed to compute matches for new listing', err);
     }
+    try {
+      await detectClusterForListing(listing.id);
+    } catch (err) {
+      console.error('Failed to check for a nearby cluster', err);
+    }
   }
 
   return listing.id;
@@ -330,6 +352,7 @@ type DbMyListingRow = {
   daily_start_time: string;
   daily_end_time: string;
   status: SaleStatus;
+  title: string | null;
   view_count: number;
   favorite_count: number;
   checkin_count: number;
@@ -340,7 +363,7 @@ export async function fetchMyListings(sellerId: string): Promise<MyListingSummar
   const { data, error } = await supabase
     .from('sale_listings')
     .select(
-      'id, address_text, start_date, end_date, daily_start_time, daily_end_time, status, view_count, favorite_count, checkin_count, listing_photos(storage_key, sort_order)'
+      'id, address_text, start_date, end_date, daily_start_time, daily_end_time, status, title, view_count, favorite_count, checkin_count, listing_photos(storage_key, sort_order)'
     )
     .eq('seller_id', sellerId)
     .order('created_at', { ascending: false });
@@ -352,7 +375,7 @@ export async function fetchMyListings(sellerId: string): Promise<MyListingSummar
     const photoUrls = sortedPhotoUrls(row.listing_photos);
     return {
       id: row.id,
-      title: deriveTitle(row.address_text),
+      title: row.title ?? deriveTitle(row.address_text),
       tagLabel,
       tagVariant,
       isDraft: row.status === 'draft',
@@ -379,6 +402,7 @@ export type EditableListing = {
   addressText: string;
   startDate: string;
   endDate: string;
+  title: string | null;
   description: string;
   otherItems: string[];
   categoryNames: string[];
@@ -390,6 +414,7 @@ type DbEditableListingRow = {
   address_text: string;
   start_date: string;
   end_date: string;
+  title: string | null;
   description: string | null;
   other_items: string[];
   status: SaleStatus;
@@ -403,7 +428,7 @@ type DbEditableListingRow = {
 export async function fetchEditableListing(id: string, sellerId: string): Promise<EditableListing | null> {
   const { data, error } = await supabase
     .from('sale_listings')
-    .select('id, address_text, start_date, end_date, description, other_items, status, listing_categories(categories(name))')
+    .select('id, address_text, start_date, end_date, title, description, other_items, status, listing_categories(categories(name))')
     .eq('id', id)
     .eq('seller_id', sellerId)
     .maybeSingle();
@@ -421,6 +446,7 @@ export async function fetchEditableListing(id: string, sellerId: string): Promis
     addressText: row.address_text,
     startDate: row.start_date,
     endDate: row.end_date,
+    title: row.title,
     description: row.description ?? '',
     otherItems: row.other_items,
     categoryNames,
@@ -432,6 +458,7 @@ export type UpdateSaleListingInput = {
   id: string;
   startDate: string;
   endDate: string;
+  title?: string;
   description: string;
   otherItems: string[];
   categoryNames: string[];
@@ -444,6 +471,7 @@ export async function updateSaleListing(input: UpdateSaleListingInput): Promise<
   const updatePayload: Record<string, unknown> = {
     start_date: input.startDate,
     end_date: input.endDate,
+    title: input.title?.trim() ? input.title.trim() : null,
     description: input.description || null,
     other_items: input.otherItems,
   };
@@ -504,6 +532,11 @@ export async function updateSaleListing(input: UpdateSaleListingInput): Promise<
       });
     } catch (err) {
       console.error('Failed to compute matches for published listing', err);
+    }
+    try {
+      await detectClusterForListing(input.id);
+    } catch (err) {
+      console.error('Failed to check for a nearby cluster', err);
     }
   }
 }

@@ -9,6 +9,7 @@ import { PriceTag } from '@/components/garagehunt/price-tag';
 import { Colors, Fonts } from '@/constants/brand';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { deriveHotTier, HOT_TIER_LABELS, nextHotTierProgress } from '@/utils/hot-tier';
+import { goBack } from '@/utils/navigation';
 import { fetchMyListings, MyListingSummary } from '@/utils/sale-listings';
 
 function MyListingCard({ listing }: { listing: MyListingSummary }) {
@@ -109,10 +110,10 @@ export default function MyListingsScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
-          <Pressable style={styles.iconButton} onPress={() => router.back()}>
+          <Pressable style={styles.iconButton} onPress={() => goBack()}>
             <Ionicons name="chevron-back" size={18} color={Colors.ink} />
           </Pressable>
           <Text style={styles.title}>My listings</Text>

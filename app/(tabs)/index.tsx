@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Chip } from '@/components/garagehunt/chip';
+import { DiscoverAdCard } from '@/components/garagehunt/discover-ad-card';
 import { DiscoverMap } from '@/components/garagehunt/discover-map';
 import { EventCard } from '@/components/garagehunt/event-card';
 import { MockSale, SaleCard } from '@/components/garagehunt/sale-card';
@@ -61,6 +62,26 @@ function matchesActiveFilters(sale: MockSale, activeFilters: string[], otherKeyw
 }
 
 type ViewMode = 'map' | 'list';
+
+// Monetization (feature spec Section 10 / tech architecture doc's
+// Monetization note): free tier is ad-supported, banner ads only, inserted
+// at natural scroll breaks — never interstitials, never on action screens
+// like List a Sale or Route Planner. Discover's feed is the only place
+// DiscoverAdCard is ever mounted.
+const AD_FEED_INTERVAL = 6;
+
+type FeedItem = { kind: 'listing'; sale: MockSale } | { kind: 'ad'; key: string };
+
+function buildFeedItems(sales: MockSale[]): FeedItem[] {
+  const items: FeedItem[] = [];
+  sales.forEach((sale, index) => {
+    items.push({ kind: 'listing', sale });
+    if ((index + 1) % AD_FEED_INTERVAL === 0) {
+      items.push({ kind: 'ad', key: `ad-${index}` });
+    }
+  });
+  return items;
+}
 
 export default function DiscoverScreen() {
   const [activeFilters, setActiveFilters] = useState<string[]>(['This weekend']);
@@ -259,13 +280,13 @@ export default function DiscoverScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ReviewPromptGate />
-      <FlatList<MockSale>
+      <FlatList<FeedItem>
         style={styles.list}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
-        data={filteredListings ?? []}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <SaleCard sale={item} />}
+        data={buildFeedItems(filteredListings ?? [])}
+        keyExtractor={(item) => (item.kind === 'listing' ? item.sale.id : item.key)}
+        renderItem={({ item }) => (item.kind === 'listing' ? <SaleCard sale={item.sale} /> : <DiscoverAdCard />)}
         ListHeaderComponent={header}
         ListEmptyComponent={
           <Text style={styles.emptyText}>

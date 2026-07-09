@@ -11,6 +11,7 @@ import { MOCK_SALES } from '@/constants/mock-data';
 import { Coordinates, useCurrentLocation } from '@/hooks/use-current-location';
 import { formatSaleSchedule } from '@/utils/format-sale-schedule';
 import { getOptimizedRoute, OptimizedRoute } from '@/utils/mapbox-directions';
+import { goBack } from '@/utils/navigation';
 
 // Manual-pick mode only (feature spec Section 4b, Mode 1) — routes through
 // every mock listing rather than a real favorited-listings selection, since
@@ -71,9 +72,9 @@ export default function RoutePlannerScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.backRow}>
-        <Pressable style={styles.iconButton} onPress={() => router.back()}>
+        <Pressable style={styles.iconButton} onPress={() => goBack()}>
           <Ionicons name="chevron-back" size={18} color={Colors.ink} />
         </Pressable>
         <Text style={styles.title}>Plan my route</Text>

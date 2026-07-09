@@ -22,6 +22,7 @@ import { DEFAULT_MAP_REGION } from '@/constants/map';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { getErrorMessage } from '@/utils/get-error-message';
+import { goBack } from '@/utils/navigation';
 import { parseDisplayDate } from '@/utils/parse-sale-form-input';
 import { createTownWideEvent } from '@/utils/town-wide-events';
 
@@ -68,7 +69,7 @@ export default function CreateEventScreen() {
         startDate: startDateIso,
         endDate: endDateIso,
       });
-      router.back();
+      goBack();
     } catch (err) {
       console.error('Failed to create event', err);
       setSubmitError(getErrorMessage(err, 'Something went wrong creating your event.'));
@@ -78,15 +79,15 @@ export default function CreateEventScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.headerRow}>
-        <Pressable style={styles.iconButton} onPress={() => router.back()}>
+        <Pressable style={styles.iconButton} onPress={() => goBack()}>
           <Ionicons name="chevron-back" size={18} color={Colors.ink} />
         </Pressable>
         <Text style={styles.title}>Create event</Text>
       </View>
 
-      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <ScrollView
             style={styles.flexFill}

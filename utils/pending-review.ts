@@ -22,13 +22,14 @@ type FavoriteRow = {
     start_date: string;
     end_date: string;
     status: SaleStatus;
+    title: string | null;
   } | null;
 };
 
 export async function fetchPendingReviewPrompt(userId: string): Promise<PendingReview | null> {
   const { data, error } = await supabase
     .from('favorites')
-    .select('sale_listings(id, seller_id, address_text, start_date, end_date, status)')
+    .select('sale_listings(id, seller_id, address_text, start_date, end_date, status, title)')
     .eq('user_id', userId);
   if (error) throw error;
 
@@ -55,6 +56,6 @@ export async function fetchPendingReviewPrompt(userId: string): Promise<PendingR
   return {
     listingId: next.id,
     sellerId: next.seller_id,
-    title: deriveTitle(next.address_text),
+    title: next.title ?? deriveTitle(next.address_text),
   };
 }

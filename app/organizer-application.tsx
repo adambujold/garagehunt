@@ -21,6 +21,7 @@ import { deriveDisplayName } from '@/app/(tabs)/profile';
 import { Colors, Fonts } from '@/constants/brand';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { getErrorMessage } from '@/utils/get-error-message';
+import { goBack } from '@/utils/navigation';
 import {
   fetchLatestOrganizerApplication,
   OrganizerApplication,
@@ -112,7 +113,7 @@ export default function OrganizerApplicationScreen() {
 
   const header = (
     <View style={styles.headerRow}>
-      <Pressable style={styles.iconButton} onPress={() => router.back()}>
+      <Pressable style={styles.iconButton} onPress={() => goBack()}>
         <Ionicons name="chevron-back" size={18} color={Colors.ink} />
       </Pressable>
       <Text style={styles.title}>Become an organizer</Text>
@@ -121,7 +122,7 @@ export default function OrganizerApplicationScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         {header}
         <View style={styles.stateBox}>
           <ActivityIndicator color={Colors.coral} />
@@ -142,7 +143,7 @@ export default function OrganizerApplicationScreen() {
   if (statusToShow) {
     const copy = STATUS_COPY[statusToShow];
     return (
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         {header}
         <View style={styles.successBody}>
           <View style={styles.successIcon}>
@@ -156,9 +157,9 @@ export default function OrganizerApplicationScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       {header}
-      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <ScrollView
             style={styles.flexFill}

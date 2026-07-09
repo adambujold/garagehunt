@@ -85,6 +85,12 @@ export default function RootLayout() {
         <Stack.Screen name="listing-buyers/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="matches-for-you" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
+        <Stack.Screen name="cluster-claim/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="create-event" options={{ headerShown: false }} />
+        <Stack.Screen name="event/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="organizer-application" options={{ headerShown: false }} />
+        <Stack.Screen name="organizer-dashboard" options={{ headerShown: false }} />
+        <Stack.Screen name="organizer-event/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       </Stack>
       <StatusBar style="auto" />
