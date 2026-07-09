@@ -190,7 +190,10 @@ export default function SaleDetailScreen() {
     );
   }
 
-  const isTownWide = sale.tagVariant === 'town';
+  // tagVariant === 'town' only ever applied to old placeholder mock data —
+  // eventId is the real signal now that a listing can actually join a
+  // town_wide_events row (see 0014_town_wide_events.sql).
+  const isTownWide = sale.tagVariant === 'town' || sale.eventId !== null;
   const hotTier = deriveHotTier(sale.favoriteCount);
   const isLive = sale.tagVariant === 'live';
   const withinCheckInRange = Boolean(

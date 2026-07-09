@@ -52,7 +52,8 @@ export type PriceTagVariant =
   | 'category'
   | 'hot'
   | 'blazingHot'
-  | 'infernoHot';
+  | 'infernoHot'
+  | 'organizer';
 
 export const PriceTagVariantColors: Record<PriceTagVariant, string> = {
   live: Colors.jade,
@@ -68,6 +69,9 @@ export const PriceTagVariantColors: Record<PriceTagVariant, string> = {
   hot: '#E05A1E',
   blazingHot: '#C7360A',
   infernoHot: '#9E1B0A',
+  // Shares "town"'s violet — organizer status is directly about town-wide
+  // events, so the same accent reads as intentional, not coincidental.
+  organizer: Colors.violet,
 };
 
 // Three-tier "Hot listing" progression (feature spec Section 4d: "once a

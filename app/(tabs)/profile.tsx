@@ -6,6 +6,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { PriceTag } from '@/components/garagehunt/price-tag';
 import { ReviewPromptGate } from '@/components/garagehunt/review-prompt-gate';
 import { SaleCard } from '@/components/garagehunt/sale-card';
 import { ShopperTierInfoModal } from '@/components/garagehunt/shopper-tier-info-modal';
@@ -13,6 +14,11 @@ import { Colors, Fonts, SHOPPER_TIER_THRESHOLDS } from '@/constants/brand';
 import { MOCK_SALES } from '@/constants/mock-data';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { fetchBuyerCheckinCount } from '@/utils/check-ins';
+import {
+  fetchIsVerifiedOrganizer,
+  fetchLatestOrganizerApplication,
+  markOrganizerApplicationSeen,
+} from '@/utils/organizer-applications';
 import { fetchSellerRating, SellerRating } from '@/utils/reviews';
 import { deriveShopperTier, SHOPPER_TIER_LABELS } from '@/utils/shopper-tier';
 import { supabase } from '@/utils/supabase';
@@ -24,7 +30,7 @@ const myListings = MOCK_SALES.filter((sale) => MY_SALE_IDS.includes(sale.id));
 // signup-screen.tsx) — no separate profile table exists yet. Accounts that
 // never went through that flow (or predate it) won't have one, so this
 // falls back to the email's local part rather than showing nothing.
-function deriveDisplayName(session: Session | null): string {
+export function deriveDisplayName(session: Session | null): string {
   const metaName = session?.user.user_metadata?.display_name;
   if (typeof metaName === 'string' && metaName.trim().length > 0) return metaName.trim();
   const email = session?.user.email;
@@ -39,21 +45,33 @@ function deriveInitials(name: string): string {
   return (words[0][0] + words[1][0]).toUpperCase();
 }
 
-const SHORTCUTS: {
+type Shortcut = {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   onPress?: () => void;
-}[] = [
-  { icon: 'list-outline', label: 'My listings', onPress: () => router.push('/my-listings') },
-  { icon: 'locate-outline', label: 'Saved searches', onPress: () => router.push('/looking-for') },
-  { icon: 'shield-checkmark-outline', label: 'Become an organizer' },
-  { icon: 'log-out-outline', label: 'Sign out', onPress: () => supabase.auth.signOut() },
-];
+};
+
+// "Organizer dashboard" replaces "Become an organizer" once verified —
+// re-applying makes no sense at that point, and the dashboard is the thing
+// they actually want (feature spec Section 5b lists both as separate,
+// conditional shortcuts).
+function buildShortcuts(isVerifiedOrganizer: boolean): Shortcut[] {
+  return [
+    { icon: 'list-outline', label: 'My listings', onPress: () => router.push('/my-listings') },
+    { icon: 'locate-outline', label: 'Saved searches', onPress: () => router.push('/looking-for') },
+    isVerifiedOrganizer
+      ? { icon: 'megaphone-outline', label: 'Organizer dashboard', onPress: () => router.push('/organizer-dashboard') }
+      : { icon: 'shield-checkmark-outline', label: 'Become an organizer', onPress: () => router.push('/organizer-application') },
+    { icon: 'log-out-outline', label: 'Sign out', onPress: () => supabase.auth.signOut() },
+  ];
+}
 
 export default function ProfileScreen() {
   const { session } = useAuthSession();
   const [rating, setRating] = useState<SellerRating>({ avgRating: null, reviewCount: 0 });
   const [checkinCount, setCheckinCount] = useState(0);
+  const [isVerifiedOrganizer, setIsVerifiedOrganizer] = useState(false);
+  const [showApprovalBanner, setShowApprovalBanner] = useState(false);
   const [showTierInfo, setShowTierInfo] = useState(false);
 
   useFocusEffect(
@@ -70,6 +88,25 @@ export default function ProfileScreen() {
           if (!cancelled) setCheckinCount(count);
         })
         .catch((err) => console.error('Failed to fetch check-in count', err));
+      fetchIsVerifiedOrganizer(session.user.id)
+        .then((verified) => {
+          if (!cancelled) setIsVerifiedOrganizer(verified);
+        })
+        .catch((err) => console.error('Failed to fetch organizer status', err));
+      // Surfaces approval proactively, rather than requiring the user to
+      // think to check the "Become an organizer" screen — a one-time
+      // banner, immediately marked seen so it doesn't resurface next visit.
+      fetchLatestOrganizerApplication(session.user.id)
+        .then((application) => {
+          if (cancelled || !application) return;
+          if (application.status === 'approved' && !application.seenApproval) {
+            setShowApprovalBanner(true);
+            markOrganizerApplicationSeen(application.id).catch((err) =>
+              console.error('Failed to mark organizer approval as seen', err)
+            );
+          }
+        })
+        .catch((err) => console.error('Failed to check organizer application status', err));
       return () => {
         cancelled = true;
       };
@@ -77,6 +114,7 @@ export default function ProfileScreen() {
   );
 
   const shopperTier = deriveShopperTier(checkinCount);
+  const shortcuts = buildShortcuts(isVerifiedOrganizer);
   const displayName = deriveDisplayName(session);
   const initials = deriveInitials(displayName);
 
@@ -84,12 +122,24 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ReviewPromptGate />
       <ScrollView contentContainerStyle={styles.content}>
+        {showApprovalBanner && (
+          <View style={styles.approvalBanner}>
+            <Text style={styles.approvalBannerText}>
+              🎉 Your organizer application was approved!
+            </Text>
+            <Pressable onPress={() => setShowApprovalBanner(false)} hitSlop={8}>
+              <Ionicons name="close" size={15} color="#0F6E56" />
+            </Pressable>
+          </View>
+        )}
+
         <View style={styles.header}>
           <View style={styles.avatar}>
             <Text style={styles.avatarLabel}>{initials}</Text>
           </View>
           <View style={styles.headerText}>
             <Text style={styles.name}>{displayName}</Text>
+            {isVerifiedOrganizer && <PriceTag label="Verified organizer" variant="organizer" rotate={-2} />}
             <View style={styles.headerSubRow}>
               <Ionicons name="location" size={10} color={Colors.muted} />
               <Text style={styles.headerSub}>London, ON &middot; Member since 2026</Text>
@@ -162,7 +212,7 @@ export default function ProfileScreen() {
         </ScrollView>
 
         <Text style={styles.sectionTitle}>Shortcuts</Text>
-        {SHORTCUTS.map((shortcut) => (
+        {shortcuts.map((shortcut) => (
           <Pressable key={shortcut.label} style={styles.shortcutRow} onPress={shortcut.onPress}>
             <Ionicons name={shortcut.icon} size={16} color={Colors.violet} />
             <Text style={styles.shortcutLabel}>{shortcut.label}</Text>
@@ -183,6 +233,22 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingBottom: 32,
+  },
+  approvalBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#DCF3EE',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  approvalBannerText: {
+    flex: 1,
+    fontFamily: Fonts.bodySemiBold,
+    fontSize: 12,
+    color: '#0F6E56',
   },
   header: {
     flexDirection: 'row',

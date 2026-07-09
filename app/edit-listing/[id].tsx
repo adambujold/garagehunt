@@ -130,6 +130,12 @@ export default function EditListingScreen() {
   const runPhotoPicker = async (picker: () => Promise<string | null>) => {
     if (!listing) return;
     setPhotoSourceSheetVisible(false);
+    // Presenting the native camera/library picker in the same tick as
+    // closing this Modal races its close animation on iOS — the picker can
+    // silently fail to appear (the promise never resolves, leaving the
+    // loading spinner stuck forever). Waiting for the close animation to
+    // finish first avoids it.
+    await new Promise((resolve) => setTimeout(resolve, 500));
     setPickingPhoto(true);
     try {
       const uri = await picker();

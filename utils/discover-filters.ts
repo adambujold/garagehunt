@@ -69,3 +69,16 @@ export function matchesOtherKeyword(sale: Pick<MockSale, 'description' | 'otherI
   if (sale.description.toLowerCase().includes(needle)) return true;
   return sale.otherItems.some((item) => item.toLowerCase().includes(needle));
 }
+
+// Backs the top search bar ("Search categories or items") — broader than
+// matchesOtherKeyword since a query here can also match one of the 11 fixed
+// category names, not just free text.
+export function matchesSearchQuery(
+  sale: Pick<MockSale, 'categories' | 'description' | 'otherItems'>,
+  query: string
+): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  const categoryMatch = sale.categories.some((category) => category.toLowerCase().includes(needle));
+  return categoryMatch || matchesOtherKeyword(sale, needle);
+}

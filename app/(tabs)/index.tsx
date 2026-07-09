@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Chip } from '@/components/garagehunt/chip';
 import { DiscoverMap } from '@/components/garagehunt/discover-map';
+import { EventCard } from '@/components/garagehunt/event-card';
 import { MockSale, SaleCard } from '@/components/garagehunt/sale-card';
 import { ReviewPromptGate } from '@/components/garagehunt/review-prompt-gate';
 import { Colors, Fonts } from '@/constants/brand';
@@ -25,11 +27,13 @@ import {
   matchesCategory,
   matchesNext7Days,
   matchesOtherKeyword,
+  matchesSearchQuery,
   matchesThisWeekend,
   matchesToday,
   matchesTownWide,
 } from '@/utils/discover-filters';
 import { fetchSaleListings } from '@/utils/sale-listings';
+import { fetchEventParticipantCount, findNearbyEventsForBuyer, TownWideEvent } from '@/utils/town-wide-events';
 
 const DATE_FILTERS = ['Today', 'This weekend', 'Next 7 days'];
 
@@ -63,9 +67,14 @@ export default function DiscoverScreen() {
   // Free-text query for the "Other" chip — reset whenever that chip is
   // deselected so re-selecting it later doesn't resurface a stale query.
   const [otherKeyword, setOtherKeyword] = useState('');
+  // Top search bar — independent of the "Other" chip's keyword field
+  // (that one only applies once "Other" is selected); this applies on top
+  // of whatever chips are active, same AND-combination as the chips.
+  const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('map');
   const [listings, setListings] = useState<MockSale[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [nearbyEvents, setNearbyEvents] = useState<{ event: TownWideEvent; participantCount: number }[]>([]);
   const { coords } = useCurrentLocation();
 
   // Expo Router keeps each tab's screen mounted in the background, so a
@@ -89,6 +98,31 @@ export default function DiscoverScreen() {
     }, [coords?.latitude, coords?.longitude])
   );
 
+  // Separate from the listings fetch above — events are few enough that
+  // fetching per-event participant counts here is cheap, and keeping this
+  // independent means a slow/failed event lookup never blocks the sales list.
+  useFocusEffect(
+    useCallback(() => {
+      if (!coords) return;
+      let cancelled = false;
+      findNearbyEventsForBuyer(coords)
+        .then(async (events) => {
+          const withCounts = await Promise.all(
+            events.map(async (event) => ({
+              event,
+              participantCount: await fetchEventParticipantCount(event.id),
+            }))
+          );
+          if (!cancelled) setNearbyEvents(withCounts);
+        })
+        .catch((err) => console.error('Failed to check for nearby town-wide events', err));
+      return () => {
+        cancelled = true;
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [coords?.latitude, coords?.longitude])
+  );
+
   const toggleFilter = (filter: string) => {
     setActiveFilters((current) => {
       const isActive = current.includes(filter);
@@ -101,7 +135,9 @@ export default function DiscoverScreen() {
   // array is a no-op here (.every on []  is true), so clearing every chip
   // naturally falls back to showing everything again.
   const filteredListings = listings
-    ? listings.filter((sale) => matchesActiveFilters(sale, activeFilters, otherKeyword))
+    ? listings.filter(
+        (sale) => matchesSearchQuery(sale, searchQuery) && matchesActiveFilters(sale, activeFilters, otherKeyword)
+      )
     : null;
 
   const header = (
@@ -121,9 +157,13 @@ export default function DiscoverScreen() {
       <View style={styles.searchBar}>
         <Ionicons name="search" size={15} color={Colors.mutedDark} />
         <TextInput
+          value={searchQuery}
+          onChangeText={setSearchQuery}
           placeholder="Search categories or items"
           placeholderTextColor={Colors.muted}
           style={styles.searchInput}
+          returnKeyType="search"
+          onSubmitEditing={Keyboard.dismiss}
         />
       </View>
 
@@ -151,9 +191,15 @@ export default function DiscoverScreen() {
             placeholder="e.g. record player, board games..."
             placeholderTextColor={Colors.mutedLight}
             style={styles.otherKeywordInput}
+            returnKeyType="search"
+            onSubmitEditing={Keyboard.dismiss}
           />
         </View>
       )}
+
+      {nearbyEvents.map(({ event, participantCount }) => (
+        <EventCard key={event.id} event={event} participantCount={participantCount} />
+      ))}
 
       <View style={styles.viewToggleRow}>
         <Pressable
@@ -216,6 +262,7 @@ export default function DiscoverScreen() {
       <FlatList<MockSale>
         style={styles.list}
         contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
         data={filteredListings ?? []}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <SaleCard sale={item} />}

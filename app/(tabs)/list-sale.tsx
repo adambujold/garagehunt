@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -28,9 +28,15 @@ import { useAuthSession } from '@/hooks/use-auth-session';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { getErrorMessage } from '@/utils/get-error-message';
 import { MAX_LISTING_PHOTOS, uploadListingPhoto } from '@/utils/listing-photos';
-import { parseDisplayDate, parseDisplayTimeRange } from '@/utils/parse-sale-form-input';
+import { formatDisplayDate, parseDisplayDate, parseDisplayTimeRange } from '@/utils/parse-sale-form-input';
 import { pickListingPhoto, takeListingPhoto } from '@/utils/pick-listing-photo';
 import { createSaleListing } from '@/utils/sale-listings';
+import {
+  fetchEventParticipantCount,
+  findNearbyEvent,
+  submitEventJoinRequest,
+  TownWideEvent,
+} from '@/utils/town-wide-events';
 
 const TOTAL_STEPS = 4;
 
@@ -70,6 +76,57 @@ export default function ListSaleScreen() {
   const [otherItems, setOtherItems] = useState<string[]>([]);
 
   const [joinEventStatus, setJoinEventStatus] = useState<JoinEventStatus>('undecided');
+  // undefined = hasn't checked yet (or still checking), null = checked and
+  // found nothing nearby — distinct from "haven't looked" so step 3 can
+  // show a loading state vs. the real "no matching event" state.
+  const [matchedEvent, setMatchedEvent] = useState<TownWideEvent | null | undefined>(undefined);
+  const [matchedEventParticipantCount, setMatchedEventParticipantCount] = useState(0);
+
+  // Checks for a real nearby town-wide event once the seller reaches step
+  // 3, using whatever address/dates they already entered in step 1 — the
+  // listing doesn't exist yet at this point (see uploadPendingPhotos'
+  // comment for the same deferred-until-a-real-id pattern), so this can
+  // only match against the event's location/dates, not a listing id.
+  useEffect(() => {
+    if (step !== 3) return;
+    let cancelled = false;
+    setMatchedEvent(undefined);
+
+    let startDateIso: string;
+    let endDateIso: string;
+    try {
+      startDateIso = parseDisplayDate(startDate);
+      endDateIso = parseDisplayDate(endDate);
+    } catch {
+      setMatchedEvent(null);
+      return;
+    }
+
+    const origin = coords ?? {
+      latitude: DEFAULT_MAP_REGION.latitude,
+      longitude: DEFAULT_MAP_REGION.longitude,
+    };
+
+    findNearbyEvent({ latitude: origin.latitude, longitude: origin.longitude, startDate: startDateIso, endDate: endDateIso })
+      .then((event) => {
+        if (cancelled) return;
+        setMatchedEvent(event);
+        if (event) {
+          return fetchEventParticipantCount(event.id).then((count) => {
+            if (!cancelled) setMatchedEventParticipantCount(count);
+          });
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to check for nearby town-wide events', err);
+        if (!cancelled) setMatchedEvent(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   const toggleCategory = (category: string) => {
     setCategories((current) => {
@@ -97,6 +154,12 @@ export default function ListSaleScreen() {
 
   const runPhotoPicker = async (picker: () => Promise<string | null>) => {
     setPhotoSourceSheetVisible(false);
+    // Presenting the native camera/library picker in the same tick as
+    // closing this Modal races its close animation on iOS — the picker can
+    // silently fail to appear (the promise never resolves, leaving the
+    // loading spinner stuck forever). Waiting for the close animation to
+    // finish first avoids it.
+    await new Promise((resolve) => setTimeout(resolve, 500));
     setPickingPhoto(true);
     try {
       const uri = await picker();
@@ -122,6 +185,14 @@ export default function ListSaleScreen() {
     }
   };
 
+  // Same deferred-until-a-real-id pattern as uploadPendingPhotos — the join
+  // request needs a real listing_id, which only exists once the listing
+  // itself has been created.
+  const submitPendingEventJoinRequest = async (listingId: string, sellerId: string) => {
+    if (joinEventStatus !== 'requested' || !matchedEvent) return;
+    await submitEventJoinRequest({ eventId: matchedEvent.id, listingId, sellerId });
+  };
+
   const resetForm = () => {
     setStep(1);
     setPublished(false);
@@ -138,6 +209,8 @@ export default function ListSaleScreen() {
     setDescription('');
     setOtherItems([]);
     setJoinEventStatus('undecided');
+    setMatchedEvent(undefined);
+    setMatchedEventParticipantCount(0);
   };
 
   const handlePublish = async () => {
@@ -172,6 +245,14 @@ export default function ListSaleScreen() {
         status: 'published',
       });
       await uploadPendingPhotos(listingId);
+      try {
+        await submitPendingEventJoinRequest(listingId, session.user.id);
+      } catch (err) {
+        // Same reasoning as computeAndInsertMatches — a side effect of
+        // publishing, not core listing data, so it shouldn't fail the
+        // publish itself.
+        console.error('Failed to submit event join request', err);
+      }
 
       setPublished(true);
     } catch (err) {
@@ -218,6 +299,11 @@ export default function ListSaleScreen() {
         status: 'draft',
       });
       await uploadPendingPhotos(listingId);
+      try {
+        await submitPendingEventJoinRequest(listingId, session.user.id);
+      } catch (err) {
+        console.error('Failed to submit event join request', err);
+      }
 
       setDraftSaved(true);
     } catch (err) {
@@ -443,46 +529,67 @@ export default function ListSaleScreen() {
 
         {step === 3 && (
           <>
-            <Text style={styles.fieldLabel}>A town-wide event is happening near you</Text>
-            <View style={styles.reviewCard}>
-              <View style={styles.eventRow}>
-                <View style={styles.eventAvatar}>
-                  <Ionicons name="people-outline" size={16} color={Colors.violet} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.eventTitle}>Riverdale community sale</Text>
-                  <Text style={styles.eventSubtitle}>Sat, Jul 11 &middot; 42 homes</Text>
-                </View>
+            {matchedEvent === undefined ? (
+              <View style={styles.stepCenterBox}>
+                <ActivityIndicator color={Colors.coral} />
               </View>
-
-              {joinEventStatus === 'undecided' ? (
-                <View style={styles.buttonRow}>
-                  <Pressable
-                    style={styles.secondaryButton}
-                    onPress={() => setJoinEventStatus('declined')}>
-                    <Text style={styles.secondaryButtonLabel}>Not this time</Text>
-                  </Pressable>
-                  <Pressable
-                    style={styles.primaryButton}
-                    onPress={() => setJoinEventStatus('requested')}>
-                    <Text style={styles.primaryButtonLabel}>Request to join</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <View style={styles.eventStatusBanner}>
-                  <Ionicons
-                    name={joinEventStatus === 'requested' ? 'checkmark-circle' : 'close-circle'}
-                    size={14}
-                    color={joinEventStatus === 'requested' ? '#0F6E56' : Colors.muted}
-                  />
+            ) : matchedEvent === null ? (
+              <>
+                <Text style={styles.fieldLabel}>Town-wide events</Text>
+                <View style={styles.reviewCard}>
                   <Text style={styles.eventStatusText}>
-                    {joinEventStatus === 'requested'
-                      ? 'Request sent to the organizer'
-                      : "You'll list independently"}
+                    No town-wide event matches your area and dates yet — you can skip this step and
+                    list independently.
                   </Text>
                 </View>
-              )}
-            </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.fieldLabel}>A town-wide event is happening near you</Text>
+                <View style={styles.reviewCard}>
+                  <View style={styles.eventRow}>
+                    <View style={styles.eventAvatar}>
+                      <Ionicons name="people-outline" size={16} color={Colors.violet} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.eventTitle}>{matchedEvent.name}</Text>
+                      <Text style={styles.eventSubtitle}>
+                        {formatDisplayDate(matchedEvent.startDate)} &middot; {matchedEventParticipantCount}{' '}
+                        {matchedEventParticipantCount === 1 ? 'home' : 'homes'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {joinEventStatus === 'undecided' ? (
+                    <View style={styles.buttonRow}>
+                      <Pressable
+                        style={styles.secondaryButton}
+                        onPress={() => setJoinEventStatus('declined')}>
+                        <Text style={styles.secondaryButtonLabel}>Not this time</Text>
+                      </Pressable>
+                      <Pressable
+                        style={styles.primaryButton}
+                        onPress={() => setJoinEventStatus('requested')}>
+                        <Text style={styles.primaryButtonLabel}>Request to join</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.eventStatusBanner}>
+                      <Ionicons
+                        name={joinEventStatus === 'requested' ? 'checkmark-circle' : 'close-circle'}
+                        size={14}
+                        color={joinEventStatus === 'requested' ? '#0F6E56' : Colors.muted}
+                      />
+                      <Text style={styles.eventStatusText}>
+                        {joinEventStatus === 'requested'
+                          ? 'Request sent to the organizer'
+                          : "You'll list independently"}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </>
+            )}
           </>
         )}
 
@@ -768,6 +875,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.ink,
     textAlignVertical: 'top',
+  },
+  stepCenterBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
   },
   reviewCard: {
     backgroundColor: '#fff',

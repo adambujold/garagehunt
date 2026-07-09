@@ -181,6 +181,23 @@ export async function fetchSaleListings(origin: Coordinates | null): Promise<Moc
   return attachSellerRatings(sales);
 }
 
+// The event page's "approved joined listings" list — sale_listings.event_id
+// is only ever set by the event_join_request approval trigger (see
+// 0014_town_wide_events.sql), so a plain equality filter here already means
+// "approved and joined," no separate status check needed.
+export async function fetchListingsForEvent(eventId: string, origin: Coordinates | null): Promise<MockSale[]> {
+  const { data, error } = await supabase
+    .from('sale_listings')
+    .select(LISTING_SELECT)
+    .eq('event_id', eventId)
+    .eq('status', 'published')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  const sales = ((data ?? []) as unknown as DbSaleListingRow[]).map((row) => mapRowToSaleView(row, origin));
+  return attachSellerRatings(sales);
+}
+
 export async function fetchSaleListingById(
   id: string,
   origin: Coordinates | null
