@@ -72,6 +72,7 @@
 | end_date | date | last day of the sale; equals start_date for a single-day sale |
 | daily_start_time / daily_end_time | time | shared hours applied to every day in the range (e.g., 9am–2pm each day) |
 | status | enum | `draft`, `published`, `cancelled` — only real, explicitly-set states a seller controls. **"Scheduled" / "Live" / "Ended" are not separately stored** — they're derived at display/query time from `start_date`/`end_date` vs. the current date, for any listing with `status = published`. This avoids needing a cron job or scheduled server-side task just to flip a status column on a timer, which isn't worth the added infrastructure at this stage. A practical side benefit: a seller extending `end_date` on an already-"ended" (by date) listing naturally makes it "live" or "scheduled" again automatically, with no special-case logic needed. |
+| title | text | nullable; seller-editable headline. If null, display falls back to the existing auto-derived address-based title (e.g., "Maple Street garage sale") — this is additive, not a change to current default behavior. |
 | description | text | nullable |
 | other_items | text[] | nullable; free-tag entries from the "Other" category input (e.g., "guitar," "vinyl records") — stored as a list, not appended into `description`, so each tag is a discrete match target for the same keyword-matching pipeline used against buyers' `saved_searches.keywords` |
 | event_id | uuid | FK → town_wide_events, nullable |
@@ -244,7 +245,19 @@ This is a query-time concern, not just a storage concern — the API must never 
 
 ---
 
-## 6. Open Technical Decisions
+## 6. AI-Assisted Listing Content
+
+**Feature:** "✨ Get AI suggestions" on List a Sale/Edit Listing generates a suggested title and description from the seller's already-entered categories, "Other" tags, and one optional free-text prompt. Reference Section 3, step 8 of the feature spec for the exact behavior (seller always reviews/accepts/edits — nothing auto-inserted).
+
+**Architecture:** a **Supabase Edge Function** (serverless, runs on Supabase's infrastructure — no separate backend server to stand up or maintain) receives the seller's input, calls the Anthropic API (Claude) server-side, and returns the suggestion to the app. The Anthropic API key lives only in the Edge Function's environment — **never bundled into the mobile app**, where it could be extracted and stolen. This is the same "serverless, not a dedicated backend" philosophy used throughout the rest of the app.
+
+**Cost:** pay-per-use, not a subscription. A short title + description generation is a small fraction of a cent per call with a fast/cheap model — not meaningfully impactful at London-launch scale, but it is real, ongoing, usage-based cost (unlike the mostly-free-tier services used elsewhere), and it scales with usage rather than being fixed.
+
+**Abuse/cost protection:** regeneration is rate-limited per user (e.g., a handful of requests per hour) — same philosophy already applied to Mapbox route requests, since this is a real metered API call that a bad actor (or just an enthusiastic user mashing "regenerate") could otherwise run up unnecessarily.
+
+---
+
+## 7. Open Technical Decisions
 
 - **Push provider** — FCM covers Android + can also route to iOS; still need APNs certs configured either way for a React Native app.
 - **Full-text/keyword matching approach for Phase 2** — plain Postgres `tsvector` search is simplest to ship; an embedding-based similarity search would catch more synonyms but adds real infrastructure (vector DB or pgvector) for a marginal MVP gain — recommend deferring.

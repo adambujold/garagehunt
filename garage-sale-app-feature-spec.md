@@ -35,14 +35,16 @@
 5. **Categories carried** — multi-select tags:
    - Furniture, Kids/Baby, Clothing, Tools, Electronics, Sporting Goods, Books/Media, Kitchenware, Antiques/Collectibles, Garden/Outdoor, Other
    - **Selecting "Other" reveals a tag-style text input** — *"What else are you bringing?"* Typing something and pressing return/enter adds it as a removable bubble/chip, and the field clears for the next entry, so a seller can add several other items (e.g., "guitar," "vinyl records," "power tools") rather than being limited to one. These entries are stored as a list on the listing and feed into the same keyword-matching pipeline as the description (see 4c) — not just appended as plain text.
-6. **Description** — free text (optional): "Moving sale, everything must go," etc.
-7. **Join a town-wide event?** — if an Organizer has created an event in their area/date, seller can request to be added to it
-8. Review → **Publish**
-9. Confirmation screen: "Your sale is live!" with share-to-social option
+6. **Title** (optional) — a short, editable headline for the listing (e.g., "Huge Moving Sale — Furniture & Tools"). If left blank, defaults to an auto-derived title from the address (e.g., "Maple Street garage sale"), as it does today — this is a new field, not a change to existing default behavior.
+7. **Description** — free text (optional): "Moving sale, everything must go," etc.
+8. **AI-assisted title & description ("✨ Get AI suggestions"):** a button on this step generates a suggested title and description from whatever the seller's already provided (selected categories, any "Other" tags), plus one optional free-text prompt for anything else to mention. The seller sees the suggestion and can **accept, edit, or regenerate** — nothing is inserted without them seeing and approving it. This calls Anthropic's Claude API via a Supabase Edge Function (keeps the API key secret server-side, never bundled in the app). **Regeneration is rate-limited per user** (e.g., a handful per hour) — same cost/abuse-protection philosophy already applied to route requests, since this is a real pay-per-use API call, not free.
+9. **Join a town-wide event?** — if an Organizer has created an event in their area/date, seller can request to be added to it
+10. Review → **Publish**
+11. Confirmation screen: "Your sale is live!" with share-to-social option
 
 **Sale lifecycle states:** Draft → Scheduled → Live (auto-flips on start date/time) → Ended (auto-archives) → (optional) Sold Out/Cancelled toggle
 
-**Editing a published listing:** Sellers can edit a Scheduled or Live listing at any time — this matters in practice, since a two-day sale often needs updates between days (e.g., "Day 2: table sold, still have the tools"). Editable fields: photos, categories, description, and the date range itself (extend to add a day, or shorten if everything sold early). **Address is locked from editing after publish** — changing a live listing's location silently is a safety/trust risk, so an address correction requires re-submitting through review rather than a direct edit.
+**Editing a published listing:** Sellers can edit a Scheduled or Live listing at any time — this matters in practice, since a two-day sale often needs updates between days (e.g., "Day 2: table sold, still have the tools"). Editable fields: photos, categories, description, title, and the date range itself (extend to add a day, or shorten if everything sold early). **Address is locked from editing after publish** — changing a live listing's location silently is a safety/trust risk, so an address correction requires re-submitting through review rather than a direct edit.
 
 ---
 
