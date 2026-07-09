@@ -20,7 +20,7 @@ const config: ExpoConfig = {
     supportsTablet: true,
     // Required for eas build — the CLI can't write this into a dynamic
     // config for you (same reason as extra.eas.projectId below).
-    bundleIdentifier: 'com.adambujold.garagehunt',
+    bundleIdentifier: 'com.garagehunt.app',
   },
   android: {
     adaptiveIcon: {
@@ -33,7 +33,7 @@ const config: ExpoConfig = {
     predictiveBackGestureEnabled: false,
     // Same reasoning as ios.bundleIdentifier above — set now so an Android
     // build doesn't hit the identical error later.
-    package: 'com.adambujold.garagehunt',
+    package: 'com.garagehunt.app',
   },
   web: {
     output: 'static',
