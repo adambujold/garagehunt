@@ -21,6 +21,13 @@ const config: ExpoConfig = {
     // Required for eas build — the CLI can't write this into a dynamic
     // config for you (same reason as extra.eas.projectId below).
     bundleIdentifier: 'com.garagehunt.app',
+    // Answers App Store Connect's export-compliance question at build time
+    // instead of prompting for it on every submission — this app only uses
+    // standard HTTPS/TLS (Supabase, AdMob, Google Sign-In), no proprietary
+    // encryption, which qualifies for the exemption.
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+    },
   },
   android: {
     adaptiveIcon: {
