@@ -276,6 +276,8 @@ Before launch, the app needs a **Terms of Service / User Agreement presented at 
 
 **Related pre-launch checklist item:** Supabase email confirmation was disabled during development for faster testing (Authentication → Providers → Email → "Confirm email" toggled off). **Must be re-enabled before real launch** — without it, anyone can sign up with a fake, non-existent email address.
 
+**Related pre-launch checklist item:** Google Sign-In's native consent screen currently reads "'garagehunt' Wants to Use 'musrnxyygnqzbbpkuqip.supabase.co' to Sign In" — Supabase's OAuth flow opens its own `/auth/v1/authorize` endpoint first (which then forwards to Google), so iOS/Android show that raw project subdomain rather than a branded name. Fixable via Supabase's custom Auth domain feature (Pro plan or above — DNS CNAME + TXT verification, SSL auto-issued, ~30 min to activate). **Not urgent while still on test AdMob IDs and pre-launch**, but re-register the new domain's OAuth callback URL with Google Cloud Console *before* switching it over, or Google Sign-In breaks in the gap.
+
 ---
 
 ## 12. Next Phase — Actual Build
