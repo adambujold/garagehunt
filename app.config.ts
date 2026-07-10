@@ -41,6 +41,12 @@ const config: ExpoConfig = {
     // Same reasoning as ios.bundleIdentifier above — set now so an Android
     // build doesn't hit the identical error later.
     package: 'com.garagehunt.app',
+    // Required for FCM V1 push delivery on Android (the token itself comes
+    // from Firebase, not just Expo's push service) — safe to commit, see
+    // this file's header comment for why. The service account private key
+    // FCM V1 also needs is never stored in this repo; it's uploaded once via
+    // `eas credentials`, kept entirely on EAS's servers.
+    googleServicesFile: './google-services.json',
   },
   web: {
     output: 'static',

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "314154936478",
+    "project_id": "garagehunt-1c516",
+    "storage_bucket": "garagehunt-1c516.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:314154936478:android:04278d1384950035aff38f",
+        "android_client_info": {
+          "package_name": "com.garagehunt.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBUy4BVmjmePPZt0CJABRbqlsHK81SAVjw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
