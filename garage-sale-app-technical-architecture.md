@@ -313,6 +313,7 @@ The Edge Function:
 
 ## 8. Open Technical Decisions
 
-- ~~Push provider~~ — **Resolved, see Section 8 (Push Notifications).**
+- ~~Push provider~~ — **Resolved, see Section 7 (Push Notifications).**
 - **Full-text/keyword matching approach for Phase 2** — plain Postgres `tsvector` search is simplest to ship; an embedding-based similarity search would catch more synonyms but adds real infrastructure (vector DB or pgvector) for a marginal MVP gain — recommend deferring.
 - **Fuzzing algorithm specifics** — random offset within an annulus (not a simple bounding box) so the fuzzed point doesn't systematically land in a shape that reveals the true point's boundary.
+- **⚠️ Time-sensitive: legacy Supabase JWT-format API keys, deprecated by end of 2026.** Both webhook Edge Functions (`send-match-notification` and `revenuecat-webhook`) currently authenticate using the legacy JWT-format `service_role` key (`eyJhbGciOi...`) in their Authorization header, relying on Supabase's default `verify_jwt = true` setting on the function. Supabase's newer key format (`sb_secret_...`) is an opaque token, **not** a JWT, and fails that verification outright — confirmed by direct testing, not just documentation. **Before Supabase fully deprecates the legacy JWT-format keys (end of 2026 per their own timeline), both functions need migrating:** set `verify_jwt = false` on each function and implement a custom shared-secret header check instead of relying on Supabase's built-in JWT gate. Until then, the current setup is correct and working — this is a forward-looking action item with a real deadline, not a bug to fix now.

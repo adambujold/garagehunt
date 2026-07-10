@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { BannerAd, BannerAdSize } from 'react-native-google-mobile-ads';
 
 import { Colors, Fonts } from '@/constants/brand';
+import { isPurchasesAvailable, purchaseAdFree } from '@/utils/purchases';
 
 // Discover feed's sponsored placement — see garagehunt-brand-identity.html's
 // .ad-card/.ad-label for the exact visual spec this mirrors (dashed border,
@@ -17,9 +18,10 @@ import { Colors, Fonts } from '@/constants/brand';
 // for the web fallback, following the same per-platform-file pattern
 // discover-map.tsx/.web.tsx already established for react-native-maps.
 //
-// PHASE 2 TODO: once RevenueCat's ad-free entitlement lands, gate this
-// component's mount point in app/(tabs)/index.tsx behind the user's
-// is_ad_free flag — there's no such check yet, so ads always show today.
+// This component is only ever mounted when the caller (app/(tabs)/index.tsx)
+// has already determined the user isn't ad-free — the "Remove ads" link
+// below is the natural upsell for someone seeing an ad who'd rather not,
+// not a redundant second entitlement check.
 
 const BANNER_UNIT_ID = Platform.select({
   ios: process.env.EXPO_PUBLIC_ADMOB_IOS_BANNER_ID,
@@ -28,10 +30,24 @@ const BANNER_UNIT_ID = Platform.select({
 
 export function DiscoverAdCard() {
   const [failed, setFailed] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
 
   // No unit id configured, or the ad failed to load — nothing worth
   // showing a "Sponsored" frame around with no ad inside it.
   if (!BANNER_UNIT_ID || failed) return null;
+
+  const handleRemoveAds = async () => {
+    setPurchasing(true);
+    try {
+      await purchaseAdFree();
+    } catch {
+      // Settings' RemoveAdsCard is the full purchase flow with error
+      // messaging — this upsell link is best-effort; a failed/cancelled tap
+      // here just leaves the ad showing, nothing more to report.
+    } finally {
+      setPurchasing(false);
+    }
+  };
 
   return (
     <View style={styles.card}>
@@ -39,6 +55,11 @@ export function DiscoverAdCard() {
         <Text style={styles.labelText}>Sponsored</Text>
       </View>
       <BannerAd unitId={BANNER_UNIT_ID} size={BannerAdSize.BANNER} onAdFailedToLoad={() => setFailed(true)} />
+      {isPurchasesAvailable() && (
+        <Pressable style={styles.removeAdsLink} disabled={purchasing} onPress={handleRemoveAds} hitSlop={6}>
+          <Text style={styles.removeAdsLinkText}>{purchasing ? 'Processing…' : 'Remove ads'}</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -71,5 +92,14 @@ const styles = StyleSheet.create({
     color: Colors.adLabelText,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  removeAdsLink: {
+    marginTop: 6,
+  },
+  removeAdsLinkText: {
+    fontFamily: Fonts.body,
+    fontSize: 10,
+    color: Colors.muted,
+    textDecorationLine: 'underline',
   },
 });

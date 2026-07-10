@@ -23,6 +23,8 @@ import { MockSale, SaleCard } from '@/components/garagehunt/sale-card';
 import { ReviewPromptGate } from '@/components/garagehunt/review-prompt-gate';
 import { Colors, Fonts } from '@/constants/brand';
 import { CATEGORIES } from '@/constants/categories';
+import { useIsAdFree } from '@/hooks/use-ad-free';
+import { useAuthSession } from '@/hooks/use-auth-session';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import {
   matchesCategory,
@@ -72,11 +74,15 @@ const AD_FEED_INTERVAL = 6;
 
 type FeedItem = { kind: 'listing'; sale: MockSale } | { kind: 'ad'; key: string };
 
-function buildFeedItems(sales: MockSale[]): FeedItem[] {
+// showAds is false once the user has an active ad-free entitlement
+// (users.is_ad_free via useIsAdFree) — skipping insertion entirely here
+// means an ad-free feed never even allocates the FlatList slot, rather than
+// rendering DiscoverAdCard and having it decide to show nothing.
+function buildFeedItems(sales: MockSale[], showAds: boolean): FeedItem[] {
   const items: FeedItem[] = [];
   sales.forEach((sale, index) => {
     items.push({ kind: 'listing', sale });
-    if ((index + 1) % AD_FEED_INTERVAL === 0) {
+    if (showAds && (index + 1) % AD_FEED_INTERVAL === 0) {
       items.push({ kind: 'ad', key: `ad-${index}` });
     }
   });
@@ -97,6 +103,8 @@ export default function DiscoverScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [nearbyEvents, setNearbyEvents] = useState<{ event: TownWideEvent; participantCount: number }[]>([]);
   const { coords } = useCurrentLocation();
+  const { session } = useAuthSession();
+  const isAdFree = useIsAdFree(session?.user.id);
 
   // Expo Router keeps each tab's screen mounted in the background, so a
   // plain useEffect-on-mount would never refetch after publishing a new
@@ -284,7 +292,7 @@ export default function DiscoverScreen() {
         style={styles.list}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
-        data={buildFeedItems(filteredListings ?? [])}
+        data={buildFeedItems(filteredListings ?? [], !isAdFree)}
         keyExtractor={(item) => (item.kind === 'listing' ? item.sale.id : item.key)}
         renderItem={({ item }) => (item.kind === 'listing' ? <SaleCard sale={item.sale} /> : <DiscoverAdCard />)}
         ListHeaderComponent={header}

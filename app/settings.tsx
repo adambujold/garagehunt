@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DeleteAccountModal } from '@/components/garagehunt/delete-account-modal';
+import { RemoveAdsCard } from '@/components/garagehunt/remove-ads-card';
 import { Colors, Fonts } from '@/constants/brand';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { goBack } from '@/utils/navigation';
@@ -66,6 +67,8 @@ export default function SettingsScreen() {
             />
           </View>
         </View>
+
+        {session && <RemoveAdsCard userId={session.user.id} />}
 
         <Pressable style={styles.signOutButton} onPress={() => supabase.auth.signOut()}>
           <Ionicons name="log-out-outline" size={16} color={Colors.coral} />

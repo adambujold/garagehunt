@@ -17,6 +17,7 @@ import { useAuthSession } from '@/hooks/use-auth-session';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useMatchNotificationDeepLink } from '@/hooks/use-match-notification-deep-link';
 import { registerForPushNotificationsAsync } from '@/utils/push-notifications';
+import { syncPurchasesUser } from '@/utils/purchases';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -57,6 +58,13 @@ export default function RootLayout() {
     registerForPushNotificationsAsync(session.user.id).catch((err) =>
       console.error('Failed to register for push notifications', err)
     );
+  }, [session]);
+
+  // "On login/app open", same reasoning as push registration above —
+  // syncPurchasesUser is a cheap no-op on Android/web (see utils/purchases.ts).
+  useEffect(() => {
+    if (!session) return;
+    syncPurchasesUser(session.user.id);
   }, [session]);
 
   useMatchNotificationDeepLink();
