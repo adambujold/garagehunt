@@ -159,9 +159,12 @@ const styles = StyleSheet.create({
   },
   titleRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 6,
   },
   title: {
+    flex: 1,
     fontFamily: Fonts.displaySemiBold,
     fontSize: 14,
     color: Colors.ink,

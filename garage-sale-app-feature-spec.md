@@ -202,7 +202,7 @@ Previously a placeholder ("coming soon"); now specified properly, since it's mor
 - Registration, seller listing creation, categories, photos
 - Map + list discovery, filters
 - Manual-pick route planning
-- Basic push notifications for matches (category-tag matching only)
+- Real push notifications for matches (via Expo's push service — see technical architecture Section 7)
 
 **Phase 2**
 - Auto-suggest route mode
@@ -254,11 +254,18 @@ All of the following are included in MVP or Phase 1 build:
 
 ## 10. Monetization — Decision
 
-**Freemium model:**
-- **Free tier:** full app functionality, supported by in-app ads.
-- **Paid tier:** ad-free experience.
+**Three-part model:**
 
-*Open item for a later pass:* whether the paid tier should include an added perk beyond ad removal (e.g., unlimited listing photos, priority placement in search/map results, early access to new listings) — pure ad-removal tiers tend to convert less well than tiers with at least one functional benefit attached. Worth revisiting once pricing strategy is discussed.
+**1. Ads (free tier):** Google AdMob banner ads, inline in the **Discover feed only** — never interstitials, never in List a Sale, Route Planner, Edit Listing, check-in, or any core action flow. Styled as a distinct "Sponsored" card (same shape as a real listing card, dashed border, muted tone, clearly labeled) — reusing the exact ad-card treatment already designed in the brand identity work, not a new visual pattern. Ads are hidden entirely for ad-free subscribers.
+
+**2. Ad-free subscription:** $4.99/month (CAD), auto-renewing, removes ads app-wide. No functional perk beyond ad removal for now — kept simple for launch; worth revisiting later whether an added benefit (e.g., unlimited listing photos) would convert better, but not blocking launch on that decision.
+
+**3. Boost a listing:** $2.99 CAD one-time purchase per boost, tied to a specific listing, lasting **48 hours** from purchase.
+- Boosted listings display a **"⭐ Featured" badge** (same masking-tape tag system as Hot Listing, Live, etc. — consistent visual language, not a new component).
+- Boosted listings get priority placement in **Discover's default browse order only**.
+- **Critical constraint:** boost status must **never** affect ranking in "I'm Looking For" matches — that ranking stays purely relevance-based (category/keyword match + distance), regardless of whether a listing is boosted. Letting paid placement override genuine search relevance would quietly erode trust in the matching system for a small amount of extra revenue — not an acceptable tradeoff.
+
+**Billing infrastructure:** RevenueCat, sitting between the app and both stores' native billing (Apple StoreKit, Google Play Billing) — avoids building/maintaining two separate native billing integrations. Free for GarageHunt at launch scale (RevenueCat's free tier covers up to $2,500/month in tracked revenue; 1% above that) — effectively no cost until the app is genuinely making money.
 
 ---
 
@@ -275,8 +282,6 @@ Before launch, the app needs a **Terms of Service / User Agreement presented at 
 **Status:** Not yet drafted. **Needs professional legal review before use** — a drafted version can serve as a starting point for a lawyer, but should not be treated as launch-ready on its own.
 
 **Related pre-launch checklist item:** Supabase email confirmation was disabled during development for faster testing (Authentication → Providers → Email → "Confirm email" toggled off). **Must be re-enabled before real launch** — without it, anyone can sign up with a fake, non-existent email address.
-
-**Related pre-launch checklist item:** Google Sign-In's native consent screen currently reads "'garagehunt' Wants to Use 'musrnxyygnqzbbpkuqip.supabase.co' to Sign In" — Supabase's OAuth flow opens its own `/auth/v1/authorize` endpoint first (which then forwards to Google), so iOS/Android show that raw project subdomain rather than a branded name. Fixable via Supabase's custom Auth domain feature (Pro plan or above — DNS CNAME + TXT verification, SSL auto-issued, ~30 min to activate). **Not urgent while still on test AdMob IDs and pre-launch**, but re-register the new domain's OAuth callback URL with Google Cloud Console *before* switching it over, or Google Sign-In breaks in the gap.
 
 ---
 

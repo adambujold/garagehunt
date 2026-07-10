@@ -163,7 +163,7 @@ Generated when a new `sale_listings` row is published: for each active `saved_se
 
 **Constraint:** one review per (`listing_id`, `reviewer_id`) pair — prevents pile-ons. `visited` is set true automatically if a `check_ins` row exists for the same (`listing_id`, `reviewer_id`) pair — surfaced in the UI as "Verified visit" rather than a self-report.
 
-**Trigger mechanism:** no scheduled server job or push notification (not built yet — see Section on push notifications being deferred pending an Apple Developer account). Eligibility is checked **when the app opens** (or when Profile/Discover gains focus): query for listings the current user favorited where derived status is "ended" and no `reviews` row exists yet for that pair. On submission, `users.seller_avg_rating` and `seller_review_count` recalculate for the listing's seller via trigger.
+**Trigger mechanism:** no scheduled server job — this stays pull-based (checked when the app opens/gains focus) even though push notifications now exist elsewhere in the app (Section 8). Push is being built specifically for Matches, the originally highest-value trigger; extending it to review prompts is a reasonable fast-follow once the core token infrastructure exists, but not required to change today since the pull-based version already works correctly. Eligibility is checked **when the app opens** (or when Profile/Discover gains focus): query for listings the current user favorited where derived status is "ended" and no `reviews` row exists yet for that pair. On submission, `users.seller_avg_rating` and `seller_review_count` recalculate for the listing's seller via trigger.
 
 ### `check_ins`
 | Field | Type | Notes |
@@ -214,8 +214,32 @@ This is a query-time concern, not just a storage concern — the API must never 
 - New accounts: first listing published flagged for manual review queue but not blocked — published immediately, pulled down only if review fails, to avoid delaying a time-sensitive listing.
 
 ### Monetization
-- Free tier: ad SDK (e.g., Google AdMob) integrated at natural break points — between Discover list results, not interstitial popups that block core flows like Route Planner or List a Sale.
-- Paid tier: handled via native App Store/Play Store subscription billing (required by platform policy for digital goods) — backend just checks entitlement status via receipt validation, doesn't process payment itself.
+- **Ads:** Google AdMob, integrated at natural break points in the Discover feed only — never interstitial popups, never in core flows like Route Planner, List a Sale, or Edit Listing. Hidden entirely when the signed-in user has an active ad-free entitlement (checked via the RevenueCat SDK client-side, cached locally).
+- **Billing:** all real purchases (ad-free subscription, listing boosts) go through **RevenueCat**, which sits on top of native App Store/Play Store billing (required by platform policy for digital goods — no way to route around this with a third-party payment processor). RevenueCat handles cross-platform receipt validation so the app doesn't implement StoreKit and Play Billing separately.
+- **Server-side sync:** RevenueCat webhooks call a Supabase Edge Function on purchase/renewal/expiration/cancellation events, updating `users.is_ad_free`/`ad_free_expires_at` (subscription) or `sale_listings.is_boosted`/`boost_expires_at` (one-time boost, tied to a specific listing via purchase metadata). This is necessary because ranking decisions (boost priority in Discover) and the ad-hide decision on any device need to be queryable from the backend, not just checked client-side on the purchasing device.
+- **Boost ranking constraint:** `is_boosted`/`boost_expires_at` affects **Discover's default browse sort order only**. The "I'm Looking For" matching query (Section 3, Matching & notifications) must never reference these fields — relevance-based ranking there stays untouched by paid placement, by design.
+
+---
+
+## 4. Monetization Data Model
+
+### `users` (additional fields)
+| Field | Type | Notes |
+|---|---|---|
+| is_ad_free | boolean | default false; synced from RevenueCat webhook, not set directly by the client |
+| ad_free_expires_at | timestamp | nullable; subscription can lapse — check both the boolean and expiry, don't trust a stale `true` alone |
+
+### `sale_listings` (additional fields)
+| Field | Type | Notes |
+|---|---|---|
+| is_boosted | boolean | default false; synced from RevenueCat webhook |
+| boost_expires_at | timestamp | nullable; 48 hours from purchase (see feature spec Section 10). Discover's default sort checks `is_boosted AND boost_expires_at > now()` — an expired boost should stop affecting sort order without needing a cleanup job, same "derive at query time" philosophy used for sale status and Hot Listing tiers |
+
+### RevenueCat product configuration (set up in App Store Connect / Play Console / RevenueCat dashboard, not in app code)
+| Product | Type | Price (CAD) | Duration |
+|---|---|---|---|
+| Ad-free subscription | Auto-renewing subscription | $4.99/month | Ongoing until cancelled |
+| Listing boost | Consumable one-time purchase | $2.99 | 48 hours per purchase, tied to one listing |
 
 ---
 
@@ -257,8 +281,38 @@ This is a query-time concern, not just a storage concern — the API must never 
 
 ---
 
-## 7. Open Technical Decisions
+## 7. Push Notifications
 
-- **Push provider** — FCM covers Android + can also route to iOS; still need APNs certs configured either way for a React Native app.
+**Provider: Expo push notification service** — not raw APNs/FCM directly. The app registers for a single "Expo push token" (via `expo-notifications`) regardless of platform; sending a notification is one call to Expo's push API, which routes to APNs (iOS) or FCM (Android) behind the scenes. Avoids maintaining two separate native notification integrations.
+
+### `push_tokens`
+| Field | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| user_id | uuid | FK → users |
+| expo_push_token | text | |
+| device_type | enum | ios, android |
+| created_at / updated_at | timestamp | |
+
+**One user can have multiple tokens** (e.g., testing on both iPhone and Android simultaneously, per Adam's actual dev setup) — send to all of a user's active tokens, don't assume one device per account.
+
+**Registration flow:** on login/app open, request notification permission via `expo-notifications`, obtain the Expo push token, upsert into `push_tokens` keyed on (user_id, expo_push_token) — an upsert rather than a plain insert, since re-registering the same device shouldn't create duplicate rows.
+
+**Send flow (Matches, the first trigger built):** originally designed around a Supabase **Database Webhook** on `matches` table insert calling an Edge Function — **actual implementation differs**: the `supabase_functions` schema needed for the Dashboard's native Webhooks feature wasn't provisioned on this project, so a **direct `pg_net` trigger** (migration 0019) calls the Edge Function instead, with error handling ensuring a notification failure can never block the listing publish itself. Functionally equivalent outcome, different mechanism — worth knowing if extending this pattern to new triggers later (e.g., review-prompt or cluster-suggestion push), since the webhook route may still be blocked on the same schema gap.
+
+The Edge Function:
+1. Checks the corresponding `saved_searches.notify_enabled` flag — skip if false
+2. Looks up the matched user's `push_tokens`
+3. Sends the notification via a single HTTPS call to Expo's push API (`https://exp.host/--/api/v2/push/send`) — **the response body must actually be parsed and checked**, not just assumed successful from a 200 status; Expo's API can return a 200 with a per-notification error inside the body (e.g., `DeviceNotRegistered`), which an early version of this Edge Function missed, silently treating real failures as successes.
+
+**Respecting notification preferences:** `users.notification_prefs` (already in the data model from early planning, previously unused) now actually gates whether a user's tokens receive sends — the Settings toggle built early in this project needs to actually read/write this field for real, rather than being a local-only placeholder.
+
+**Scope of this build:** Matches only, for now — the highest-value, most clearly-specified push trigger. Review prompts and cluster-suggestion nudges keep their existing pull-based (check-on-app-open) behavior; extending push to those is a reasonable low-effort follow-up once this core token/send infrastructure exists, not required as part of this pass.
+
+---
+
+## 8. Open Technical Decisions
+
+- ~~Push provider~~ — **Resolved, see Section 8 (Push Notifications).**
 - **Full-text/keyword matching approach for Phase 2** — plain Postgres `tsvector` search is simplest to ship; an embedding-based similarity search would catch more synonyms but adds real infrastructure (vector DB or pgvector) for a marginal MVP gain — recommend deferring.
 - **Fuzzing algorithm specifics** — random offset within an annulus (not a simple bounding box) so the fuzzed point doesn't systematically land in a shape that reveals the true point's boundary.

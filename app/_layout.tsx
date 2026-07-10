@@ -15,6 +15,8 @@ import { LoginScreen } from '@/components/garagehunt/login-screen';
 import { SignUpScreen } from '@/components/garagehunt/signup-screen';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useMatchNotificationDeepLink } from '@/hooks/use-match-notification-deep-link';
+import { registerForPushNotificationsAsync } from '@/utils/push-notifications';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -45,6 +47,19 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
+
+  // "On login/app open" per the push notifications design — re-registering
+  // on every session (not just the first sign-in ever) is intentional and
+  // cheap: it's an upsert (see push-notifications.ts), so it just keeps
+  // this device's token fresh rather than accumulating anything.
+  useEffect(() => {
+    if (!session) return;
+    registerForPushNotificationsAsync(session.user.id).catch((err) =>
+      console.error('Failed to register for push notifications', err)
+    );
+  }, [session]);
+
+  useMatchNotificationDeepLink();
 
   if (!fontsLoaded && !fontError) {
     return null;

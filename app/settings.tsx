@@ -15,15 +15,17 @@ export default function SettingsScreen() {
   const [notificationsEnabled, setNotificationsEnabledState] = useState(true);
 
   useEffect(() => {
-    getNotificationsEnabled()
+    if (!session) return;
+    getNotificationsEnabled(session.user.id)
       .then(setNotificationsEnabledState)
       .catch((err) => console.error('Failed to load notification preference', err));
-  }, []);
+  }, [session]);
 
   const handleToggleNotifications = async (value: boolean) => {
+    if (!session) return;
     setNotificationsEnabledState(value);
     try {
-      await setNotificationsEnabled(value);
+      await setNotificationsEnabled(session.user.id, value);
     } catch (err) {
       console.error('Failed to save notification preference', err);
     }
@@ -52,9 +54,7 @@ export default function SettingsScreen() {
           <View style={styles.row}>
             <View style={styles.rowTextBlock}>
               <Text style={styles.rowLabel}>Push notifications</Text>
-              <Text style={styles.rowSubtext}>
-                Not live yet — this saves your preference for when it is.
-              </Text>
+              <Text style={styles.rowSubtext}>Get notified when a new sale matches your search.</Text>
             </View>
             <Switch
               value={notificationsEnabled}

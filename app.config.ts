@@ -100,6 +100,16 @@ const config: ExpoConfig = {
         iosAppId: process.env.EXPO_PUBLIC_ADMOB_IOS_APP_ID,
       },
     ],
+    [
+      'expo-notifications',
+      {
+        // No dedicated notification icon asset yet — falls back to the app
+        // icon. color tints the small Android status-bar icon only (iOS
+        // ignores it); matches the brand's coral accent used everywhere
+        // else (constants/brand.ts Colors.coral).
+        color: '#FF6B4A',
+      },
+    ],
   ],
   experiments: {
     typedRoutes: true,
