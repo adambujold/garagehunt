@@ -83,24 +83,21 @@ const config: ExpoConfig = {
         // EXPO_PUBLIC_ADMOB_*_APP_ID change in .env, then a fresh native
         // build (these are baked in at build time, unlike the ad unit IDs
         // components/garagehunt/discover-ad-card.tsx reads at runtime).
+        //
+        // Pinned to 16.0.0 (not latest) deliberately — newer releases pull
+        // in Google Play Services Ads 25.x, whose Kotlin metadata (built
+        // with Kotlin 2.2/2.3) is newer than what this RN version's default
+        // Kotlin compiler (2.1.20) can read, failing :compileReleaseKotlin
+        // with "Module was compiled with an incompatible version of
+        // Kotlin." Overriding the project's Kotlin version to work around
+        // that turned out not to reliably propagate to this module's own
+        // independent buildscript block. play-services-ads 24.6.0 (what
+        // 16.0.0 pins) was confirmed by directly inspecting its
+        // .kotlin_module binary metadata to be built with Kotlin metadata
+        // version 2.1.0 — an exact match for this project's default, no
+        // override needed at all.
         androidAppId: process.env.EXPO_PUBLIC_ADMOB_ANDROID_APP_ID,
         iosAppId: process.env.EXPO_PUBLIC_ADMOB_IOS_APP_ID,
-      },
-    ],
-    [
-      'expo-build-properties',
-      {
-        // react-native-google-mobile-ads' Android native dependency
-        // (Google Play Services Ads 25.4.0) ships Kotlin metadata built
-        // with Kotlin 2.3.0 — newer than the 2.1.20 this RN version pins
-        // by default, which fails with "Module was compiled with an
-        // incompatible version of Kotlin" during :compileReleaseKotlin.
-        // Overriding the whole project's Kotlin version is the standard
-        // fix for this (a common mismatch whenever a native SDK like
-        // AdMob/Firebase ships ahead of RN's pinned Kotlin).
-        android: {
-          kotlinVersion: '2.3.0',
-        },
       },
     ],
   ],
