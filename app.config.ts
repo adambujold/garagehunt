@@ -47,6 +47,16 @@ const config: ExpoConfig = {
     // FCM V1 also needs is never stored in this repo; it's uploaded once via
     // `eas credentials`, kept entirely on EAS's servers.
     googleServicesFile: './google-services.json',
+    // react-native-maps has no non-Google provider on Android (unlike iOS,
+    // which defaults to Apple Maps and needs no key at all) — without this,
+    // the Discover map screen crashes on launch with
+    // "IllegalStateException: API key not found". Restricted in Google
+    // Cloud Console to this package name + the release keystore's SHA-1.
+    config: {
+      googleMaps: {
+        apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_ANDROID_API_KEY,
+      },
+    },
   },
   web: {
     output: 'static',
