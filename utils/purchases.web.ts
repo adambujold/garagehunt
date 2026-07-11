@@ -9,6 +9,8 @@ export function isPurchasesAvailable(): boolean {
 
 export function syncPurchasesUser(_userId: string): void {}
 
+export function signOutPurchasesUser(): void {}
+
 export async function purchaseAdFree(): Promise<void> {
   throw new Error('Removing ads is not available on this platform yet.');
 }

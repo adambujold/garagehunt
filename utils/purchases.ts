@@ -50,6 +50,23 @@ export function syncPurchasesUser(userId: string): void {
   Purchases.logIn(userId).catch((err) => console.error('Failed to sync RevenueCat user', err));
 }
 
+// Must be called on sign-out, before the next person can sign in on this
+// device — without this, RevenueCat stays identified as whoever was
+// signed in last, and the next account to sign in inherits that person's
+// entitlement via logIn() (confirmed as a real bug: Account B was reading
+// as ad-free purely because Account A had purchased it earlier on the same
+// device). logOut() resets the SDK to a fresh anonymous identity, so the
+// next syncPurchasesUser() call re-identifies cleanly instead of reusing
+// the previous person's customer record.
+export function signOutPurchasesUser(): void {
+  if (!isPurchasesAvailable()) return;
+  // Nothing to log out of if configure() was never called this app
+  // session (e.g. the app launched straight to a signed-out state).
+  if (!configured) return;
+
+  Purchases.logOut().catch((err) => console.error('Failed to sign out RevenueCat user', err));
+}
+
 export async function purchaseAdFree(): Promise<void> {
   if (!isPurchasesAvailable()) {
     throw new Error('Removing ads is not available on this platform yet.');

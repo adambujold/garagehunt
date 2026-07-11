@@ -17,7 +17,7 @@ import { useAuthSession } from '@/hooks/use-auth-session';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useMatchNotificationDeepLink } from '@/hooks/use-match-notification-deep-link';
 import { registerForPushNotificationsAsync } from '@/utils/push-notifications';
-import { syncPurchasesUser } from '@/utils/purchases';
+import { signOutPurchasesUser, syncPurchasesUser } from '@/utils/purchases';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -62,8 +62,16 @@ export default function RootLayout() {
 
   // "On login/app open", same reasoning as push registration above —
   // syncPurchasesUser is a cheap no-op on Android/web (see utils/purchases.ts).
+  // The sign-out branch matters just as much: without resetting RevenueCat
+  // to anonymous here, whoever signs into this device next would inherit
+  // the previous account's entitlement via syncPurchasesUser's logIn() call
+  // — session (derived from Supabase's own onAuthStateChange listener in
+  // useAuthSession) becoming null on sign-out is what drives this.
   useEffect(() => {
-    if (!session) return;
+    if (!session) {
+      signOutPurchasesUser();
+      return;
+    }
     syncPurchasesUser(session.user.id);
   }, [session]);
 
