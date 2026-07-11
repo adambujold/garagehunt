@@ -34,9 +34,21 @@ export async function registerForPushNotificationsAsync(userId: string): Promise
   if (!Device.isDevice) return;
 
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.DEFAULT,
+    // Named "match-alerts", not "default": once a channel ID is created on
+    // a device, Android locks its importance permanently — the app can
+    // never raise it later, only the user can via system settings. An
+    // earlier version of this called the channel "default" at
+    // AndroidImportance.DEFAULT, which only shows in the notification shade
+    // (no heads-up popup, no lock screen alert) — confirmed by real-device
+    // testing. Any device that already registered that old channel would
+    // stay stuck silent even after this fix, so this uses a fresh channel
+    // ID instead of trying to raise the old one's importance in place.
+    // send-match-notification's Edge Function sets channelId to match this
+    // exactly — without that, Android falls back to its own default
+    // channel instead of this one.
+    await Notifications.setNotificationChannelAsync('match-alerts', {
+      name: 'Match alerts',
+      importance: Notifications.AndroidImportance.HIGH,
     });
   }
 

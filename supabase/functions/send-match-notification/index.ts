@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
 
   const { data: tokens, error: tokensError } = await supabase
     .from('push_tokens')
-    .select('expo_push_token')
+    .select('expo_push_token, device_type')
     .eq('user_id', savedSearch.user_id);
   if (tokensError) {
     return new Response(JSON.stringify({ error: tokensError.message }), { status: 500 });
@@ -115,6 +115,11 @@ Deno.serve(async (req) => {
     title: 'New match near you!',
     body: `${listingTitle} matches your saved search.`,
     data: { type: 'match', savedSearchId, listingId },
+    // iOS ignores this field entirely — Android uses it to pick which
+    // notification channel to post to, and must match the channel ID
+    // created in utils/push-notifications.ts exactly, or it silently falls
+    // back to Android's own generic default channel instead.
+    channelId: 'match-alerts',
   }));
 
   const pushResponse = await fetch('https://exp.host/--/api/v2/push/send', {
@@ -140,9 +145,23 @@ Deno.serve(async (req) => {
   // from a real send in every log.
   const pushResult: { data?: { status: string; message?: string; details?: { error?: string } }[] } =
     await pushResponse.json();
-  console.log('Expo push tickets', JSON.stringify(pushResult));
-
   const tickets = pushResult.data ?? [];
+
+  // Logged per-token (device_type + ticket paired explicitly) rather than
+  // as a bare array — a bare array left which ticket belonged to which
+  // platform ambiguous whenever a user had multiple devices, which was a
+  // real gap hit while debugging an Android-only delivery failure: the raw
+  // tickets alone couldn't confirm which entry was the Android token's.
+  console.log(
+    'Expo push tickets',
+    JSON.stringify(
+      tokens.map((token, i) => ({
+        device_type: token.device_type,
+        expo_push_token: token.expo_push_token,
+        ticket: tickets[i],
+      }))
+    )
+  );
   const staleTokens = tokens
     .map((token, i) => ({ token: token.expo_push_token, ticket: tickets[i] }))
     .filter(({ ticket }) => ticket?.details?.error === 'DeviceNotRegistered')
