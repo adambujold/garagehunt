@@ -18,3 +18,7 @@ export async function restorePurchases(): Promise<void> {}
 export async function isAdFreeFromSdk(): Promise<boolean> {
   return false;
 }
+
+export function subscribeToCustomerInfoUpdates(_listener: (isAdFree: boolean) => void): () => void {
+  return () => {};
+}

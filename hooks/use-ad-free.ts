@@ -1,14 +1,17 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { fetchIsAdFree } from '@/utils/ad-free';
-import { isAdFreeFromSdk } from '@/utils/purchases';
+import { isAdFreeFromSdk, subscribeToCustomerInfoUpdates } from '@/utils/purchases';
 
 // Combines Supabase's stored value (source of truth, cross-device) with an
 // instant local RevenueCat SDK check (catches a just-completed purchase on
 // this device before revenuecat-webhook's round trip lands) — either one
-// reporting ad-free is enough to hide ads. Refetches on focus so returning
-// to Discover right after buying in Settings picks up the new state.
+// reporting ad-free is enough to hide ads. Refetches on focus (covers
+// returning to a screen after buying elsewhere) AND subscribes to
+// RevenueCat's own CustomerInfo listener (covers buying without ever
+// leaving the current screen — a focus-only refetch missed that case
+// entirely, confirmed by real-device testing).
 export function useIsAdFree(userId: string | undefined): boolean {
   const [supabaseAdFree, setSupabaseAdFree] = useState(false);
   const [sdkAdFree, setSdkAdFree] = useState(false);
@@ -37,6 +40,8 @@ export function useIsAdFree(userId: string | undefined): boolean {
       };
     }, [userId])
   );
+
+  useEffect(() => subscribeToCustomerInfoUpdates(setSdkAdFree), []);
 
   return supabaseAdFree || sdkAdFree;
 }

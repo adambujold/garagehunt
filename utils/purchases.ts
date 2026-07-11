@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import Purchases from 'react-native-purchases';
+import Purchases, { CustomerInfo } from 'react-native-purchases';
 
 // GarageHunt — ad-free subscription purchase flow (technical architecture
 // doc Section 4, Monetization Data Model). RevenueCat sits on top of native
@@ -77,4 +77,23 @@ export async function isAdFreeFromSdk(): Promise<boolean> {
   if (!isPurchasesAvailable()) return false;
   const info = await Purchases.getCustomerInfo();
   return info.entitlements.active[AD_FREE_ENTITLEMENT_ID] !== undefined;
+}
+
+// Fires immediately whenever RevenueCat's CustomerInfo changes — critically,
+// this fires right after purchasePackage()/restorePurchases() resolve, even
+// while the screen that triggered the purchase stays mounted/focused the
+// whole time. useIsAdFree relies on this instead of only re-fetching on
+// screen focus (a useFocusEffect alone missed same-screen purchases
+// entirely — confirmed by real-device testing where ads didn't disappear
+// until navigating away and back).
+export function subscribeToCustomerInfoUpdates(listener: (isAdFree: boolean) => void): () => void {
+  if (!isPurchasesAvailable()) return () => {};
+
+  const handler = (info: CustomerInfo) => {
+    listener(info.entitlements.active[AD_FREE_ENTITLEMENT_ID] !== undefined);
+  };
+  Purchases.addCustomerInfoUpdateListener(handler);
+  return () => {
+    Purchases.removeCustomerInfoUpdateListener(handler);
+  };
 }
