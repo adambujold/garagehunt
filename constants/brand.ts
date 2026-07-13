@@ -25,6 +25,18 @@ export const Colors = {
   mutedDark: '#5B4A7A',
   mutedLight: '#B8A8CC',
   interestPink: '#D4537E',
+  // Destructive actions (cancel a sale, delete an account) — a muted rust,
+  // deliberately not the vibrant primary coral, so a permanent/undoable
+  // action never reads with the same "happy" weight as Publish/Continue/
+  // Sign in. Matches garagehunt-reskinned-screens.html's Edit Listing
+  // "Cancel this sale" link color exactly.
+  danger: '#C9857A',
+  // Form/API error messages (invalid login, failed account deletion,
+  // etc.) — established by Login/Sign Up's error banners, a distinct
+  // semantic from `danger` above (that's for a destructive action's own
+  // button/link; this is for an error message reacting to any action).
+  errorText: '#B3261E',
+  errorBg: '#FDECEA',
   // Discover feed's "Sponsored" ad card (garagehunt-brand-identity.html's
   // .ad-card/.ad-label) — deliberately its own muted palette, not reused
   // from anywhere else, so a sponsored placement never reads as a real
@@ -60,7 +72,8 @@ export type PriceTagVariant =
   | 'hot'
   | 'blazingHot'
   | 'infernoHot'
-  | 'organizer';
+  | 'organizer'
+  | 'boosted';
 
 export const PriceTagVariantColors: Record<PriceTagVariant, string> = {
   live: Colors.jade,
@@ -79,6 +92,9 @@ export const PriceTagVariantColors: Record<PriceTagVariant, string> = {
   // Shares "town"'s violet — organizer status is directly about town-wide
   // events, so the same accent reads as intentional, not coincidental.
   organizer: Colors.violet,
+  // Same gold used for star ratings elsewhere — reads as "premium/starred"
+  // at a glance, distinct from the hot tiers' red-orange escalation.
+  boosted: Colors.marigold,
 };
 
 // Three-tier "Hot listing" progression (feature spec Section 4d: "once a

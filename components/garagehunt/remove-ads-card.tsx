@@ -8,10 +8,9 @@ import { isPurchasesAvailable, purchaseAdFree, restorePurchases } from '@/utils/
 
 // Settings' "Remove Ads" section — and the natural place for the same
 // upsell to live directly on the ad card itself (discover-ad-card.tsx),
-// per this feature's brief. isPurchasesAvailable() is false on Android
-// (blocked on Google's pending bank verification) and web (no StoreKit) —
-// this renders nothing at all in either case rather than a broken/disabled
-// button, matching "no purchase option shown" until Android's ready.
+// per this feature's brief. isPurchasesAvailable() is false on web (no
+// StoreKit/Play Billing there) — this renders nothing at all in that case
+// rather than a broken/disabled button.
 export function RemoveAdsCard({ userId }: { userId: string }) {
   const isAdFree = useIsAdFree(userId);
   const [purchasing, setPurchasing] = useState(false);

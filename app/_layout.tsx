@@ -15,7 +15,7 @@ import { LoginScreen } from '@/components/garagehunt/login-screen';
 import { SignUpScreen } from '@/components/garagehunt/signup-screen';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useMatchNotificationDeepLink } from '@/hooks/use-match-notification-deep-link';
+import { useNotificationDeepLink } from '@/hooks/use-notification-deep-link';
 import { registerForPushNotificationsAsync } from '@/utils/push-notifications';
 import { signOutPurchasesUser, syncPurchasesUser } from '@/utils/purchases';
 
@@ -75,7 +75,7 @@ export default function RootLayout() {
     syncPurchasesUser(session.user.id);
   }, [session]);
 
-  useMatchNotificationDeepLink();
+  useNotificationDeepLink();
 
   if (!fontsLoaded && !fontError) {
     return null;

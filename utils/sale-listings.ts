@@ -3,8 +3,10 @@ import { PriceTagVariant } from '@/constants/brand';
 import { Coordinates } from '@/hooks/use-current-location';
 import { detectClusterForListing } from '@/utils/cluster-suggestions';
 import { formatSaleSchedule } from '@/utils/format-sale-schedule';
+import { BOOST_DURATION_HOURS, deriveIsBoosted } from '@/utils/listing-boost';
 import { getListingPhotoUrl } from '@/utils/listing-photos';
 import { computeAndInsertMatches } from '@/utils/matches';
+import { moderateListingText } from '@/utils/moderation';
 import { formatTimeOfDay } from '@/utils/parse-sale-form-input';
 import { fetchSellerRatings } from '@/utils/reviews';
 import { supabase } from '@/utils/supabase';
@@ -63,6 +65,8 @@ export type DbSaleListingRow = {
   favorite_count: number;
   checkin_count: number;
   event_id: string | null;
+  is_boosted: boolean;
+  boost_expires_at: string | null;
   listing_categories: { categories: { name: string } | null }[] | null;
   listing_photos: { storage_key: string; sort_order: number }[] | null;
 };
@@ -70,8 +74,8 @@ export type DbSaleListingRow = {
 export const LISTING_SELECT = `
   id, seller_id, latitude, longitude, address_text, start_date, end_date,
   daily_start_time, daily_end_time, status, title, description, other_items,
-  favorite_count, checkin_count, event_id, listing_categories(categories(name)),
-  listing_photos(storage_key, sort_order)
+  favorite_count, checkin_count, event_id, is_boosted, boost_expires_at,
+  listing_categories(categories(name)), listing_photos(storage_key, sort_order)
 `;
 
 function sortedPhotoUrls(photos: { storage_key: string; sort_order: number }[] | null): string[] {
@@ -143,6 +147,7 @@ export function mapRowToSaleView(row: DbSaleListingRow, origin: Coordinates | nu
     favoriteCount: row.favorite_count,
     checkinCount: row.checkin_count,
     eventId: row.event_id,
+    isBoosted: deriveIsBoosted(row.is_boosted, row.boost_expires_at),
     photos: sortedPhotoUrls(row.listing_photos),
     // Filled in by attachSellerRatings below — mapRowToSaleView itself has
     // no seller-rating data to work with (that lives in public.users, a
@@ -180,7 +185,16 @@ export async function fetchSaleListings(origin: Coordinates | null): Promise<Moc
 
   if (error) throw error;
   const sales = ((data ?? []) as unknown as DbSaleListingRow[]).map((row) => mapRowToSaleView(row, origin));
-  return attachSellerRatings(sales);
+  const withRatings = await attachSellerRatings(sales);
+
+  // Boosted listings get priority placement in Discover's default browse
+  // order only (feature spec Section 10) — a plain stable sort on the
+  // already-derived isBoosted flag, so an expired boost naturally stops
+  // affecting placement without any cleanup process. Deliberately not
+  // applied to fetchListingsForEvent/fetchListingsByIds below, and never
+  // touches "I'm Looking For" matching (utils/matches.ts), which has no
+  // concept of boost at all.
+  return [...withRatings].sort((a, b) => Number(b.isBoosted) - Number(a.isBoosted));
 }
 
 // The event page's "approved joined listings" list — sale_listings.event_id
@@ -243,12 +257,20 @@ export type CreateSaleListingInput = {
   description: string;
   otherItems: string[];
   categoryNames: string[];
-  // 'draft' for "Save as draft" (hidden from Discover, only in My Listings)
-  // vs. 'published' for "Publish sale".
-  status: 'draft' | 'published';
 };
 
-export async function createSaleListing(input: CreateSaleListingInput): Promise<string> {
+export type CreateSaleListingResult = {
+  id: string;
+  categoryIds: string[];
+};
+
+// Always inserts as 'draft', regardless of whether the seller's ultimate
+// intent is "Save as draft" or "Publish" — see publishSaleListing below for
+// why a direct create-as-published path no longer exists (feature spec
+// Section 9's photo-moderation gate needs photos to already be uploaded and
+// classified before a listing can become published, and photos are only
+// uploaded after a listing row — with a real id — already exists).
+export async function createSaleListing(input: CreateSaleListingInput): Promise<CreateSaleListingResult> {
   const revealAt = input.immediateRevealOptIn
     ? new Date().toISOString()
     : new Date(`${input.startDate}T00:00:00`).toISOString();
@@ -266,7 +288,7 @@ export async function createSaleListing(input: CreateSaleListingInput): Promise<
       end_date: input.endDate,
       daily_start_time: input.dailyStartTime,
       daily_end_time: input.dailyEndTime,
-      status: input.status,
+      status: 'draft',
       title: input.title?.trim() ? input.title.trim() : null,
       description: input.description || null,
       other_items: input.otherItems,
@@ -297,32 +319,99 @@ export async function createSaleListing(input: CreateSaleListingInput): Promise<
     }
   }
 
-  if (input.status === 'published') {
-    try {
-      await computeAndInsertMatches({
-        id: listing.id,
-        latitude: input.latitude,
-        longitude: input.longitude,
-        startDate: input.startDate,
-        endDate: input.endDate,
-        description: input.description,
-        otherItems: input.otherItems,
-        categoryIds,
-      });
-    } catch (err) {
-      // Matching is a side effect of publishing, not core listing data —
-      // don't fail the whole publish over it, but don't swallow it silently
-      // either.
-      console.error('Failed to compute matches for new listing', err);
-    }
-    try {
-      await detectClusterForListing(listing.id);
-    } catch (err) {
-      console.error('Failed to check for a nearby cluster', err);
-    }
+  return { id: listing.id, categoryIds };
+}
+
+export type PublishSaleListingInput = {
+  id: string;
+  description: string;
+  otherItems: string[];
+  categoryIds: string[];
+};
+
+// The gate a draft listing must pass to become published (feature spec
+// Section 9, items 1/2/6) — shared by both List a Sale's initial publish
+// (after createSaleListing + photo upload) and Edit Listing's "Publish
+// sale" from an existing draft (after updateSaleListing's field save).
+// Throwing here leaves the listing as-is (still draft, any field edits
+// already saved by the caller) — only the status transition itself is
+// blocked, not the seller's other changes.
+export async function publishSaleListing(input: PublishSaleListingInput): Promise<void> {
+  const { data: listingRow, error: fetchError } = await supabase
+    .from('sale_listings')
+    .select('seller_id, latitude, longitude, start_date, end_date')
+    .eq('id', input.id)
+    .single();
+  if (fetchError) throw fetchError;
+
+  // Photo approval gate — a listing can't publish until every photo is
+  // approved, or there are zero photos. Photos land as 'approved' or
+  // 'pending' at upload time (see uploadListingPhoto) — 'rejected' is only
+  // ever set by a human via Table Editor, but is included here too in case
+  // a reviewer rejects a photo on an already-published listing's later
+  // resubmission.
+  const { data: photos, error: photosError } = await supabase
+    .from('listing_photos')
+    .select('moderation_status')
+    .eq('listing_id', input.id);
+  if (photosError) throw photosError;
+  if ((photos ?? []).some((photo) => photo.moderation_status !== 'approved')) {
+    throw new Error(
+      "One or more of your photos is still being reviewed. Your listing has been saved as a draft — try publishing again in a few minutes, or remove/replace the photo."
+    );
   }
 
-  return listing.id;
+  // Text moderation — clearly bad content blocks publishing synchronously;
+  // borderline content publishes but gets flagged.
+  const textResult = await moderateListingText(input.description);
+  if (textResult.decision === 'reject') {
+    throw new Error(textResult.reason || 'Your listing description needs to be revised before publishing.');
+  }
+
+  // New-account trust signal — a seller's first-ever published listing is
+  // always flagged for manual review regardless of what screening found,
+  // an extra caution layer for unproven accounts. Counts PUBLISHED listings
+  // only (not drafts) — an account with several abandoned drafts but zero
+  // real listings still counts as unproven.
+  const { count: publishedCount, error: countError } = await supabase
+    .from('sale_listings')
+    .select('id', { count: 'exact', head: true })
+    .eq('seller_id', listingRow.seller_id)
+    .eq('status', 'published');
+  if (countError) throw countError;
+  const isFirstListing = (publishedCount ?? 0) === 0;
+
+  const moderationStatus: 'clean' | 'pending_review' =
+    isFirstListing || textResult.decision === 'flag' ? 'pending_review' : 'clean';
+
+  const { error: publishError } = await supabase
+    .from('sale_listings')
+    .update({ status: 'published', moderation_status: moderationStatus })
+    .eq('id', input.id);
+  if (publishError) throw publishError;
+
+  try {
+    await computeAndInsertMatches({
+      id: input.id,
+      latitude: listingRow.latitude,
+      longitude: listingRow.longitude,
+      startDate: listingRow.start_date,
+      endDate: listingRow.end_date,
+      description: input.description,
+      otherItems: input.otherItems,
+      categoryIds: input.categoryIds,
+    });
+  } catch (err) {
+    // Matching is a side effect of publishing, not core listing data —
+    // don't fail the whole publish over it, but don't swallow it silently
+    // either.
+    console.error('Failed to compute matches for new listing', err);
+  }
+  try {
+    await detectClusterForListing(input.id);
+  } catch (err) {
+    console.error('Failed to check for a nearby cluster', err);
+  }
 }
 
 // My Listings (seller dashboard) — a leaner shape than MockSale since that
@@ -342,6 +431,12 @@ export type MyListingSummary = {
   // users.buyer_checkin_count across all sales.
   checkinCount: number;
   photoUrl: string | null;
+  // Already accounts for expiry (see utils/listing-boost.ts) — safe to use
+  // directly for the "⭐ Featured" badge/button label. boostExpiresAt is
+  // carried separately (unlike MockSale) so the Boost button can show
+  // when the current boost runs out.
+  isBoosted: boolean;
+  boostExpiresAt: string | null;
 };
 
 type DbMyListingRow = {
@@ -356,6 +451,8 @@ type DbMyListingRow = {
   view_count: number;
   favorite_count: number;
   checkin_count: number;
+  is_boosted: boolean;
+  boost_expires_at: string | null;
   listing_photos: { storage_key: string; sort_order: number }[] | null;
 };
 
@@ -363,7 +460,7 @@ export async function fetchMyListings(sellerId: string): Promise<MyListingSummar
   const { data, error } = await supabase
     .from('sale_listings')
     .select(
-      'id, address_text, start_date, end_date, daily_start_time, daily_end_time, status, title, view_count, favorite_count, checkin_count, listing_photos(storage_key, sort_order)'
+      'id, address_text, start_date, end_date, daily_start_time, daily_end_time, status, title, view_count, favorite_count, checkin_count, is_boosted, boost_expires_at, listing_photos(storage_key, sort_order)'
     )
     .eq('seller_id', sellerId)
     .order('created_at', { ascending: false });
@@ -388,6 +485,8 @@ export async function fetchMyListings(sellerId: string): Promise<MyListingSummar
       }),
       viewCount: row.view_count,
       favoriteCount: row.favorite_count,
+      isBoosted: deriveIsBoosted(row.is_boosted, row.boost_expires_at),
+      boostExpiresAt: row.boost_expires_at,
       checkinCount: row.checkin_count,
       photoUrl: photoUrls[0] ?? null,
     };
@@ -468,6 +567,11 @@ export type UpdateSaleListingInput = {
 };
 
 export async function updateSaleListing(input: UpdateSaleListingInput): Promise<void> {
+  // status is deliberately never set here, even when input.publish is true
+  // — publishSaleListing below is the only path allowed to flip a listing
+  // to 'published', since it's also the moderation gate (feature spec
+  // Section 9). Field edits still save regardless of whether the gate
+  // ultimately blocks the publish.
   const updatePayload: Record<string, unknown> = {
     start_date: input.startDate,
     end_date: input.endDate,
@@ -475,7 +579,6 @@ export async function updateSaleListing(input: UpdateSaleListingInput): Promise<
     description: input.description || null,
     other_items: input.otherItems,
   };
-  if (input.publish) updatePayload.status = 'published';
 
   const { error: updateError } = await supabase
     .from('sale_listings')
@@ -512,36 +615,42 @@ export async function updateSaleListing(input: UpdateSaleListingInput): Promise<
   }
 
   if (input.publish) {
-    try {
-      const { data: listingRow, error: fetchError } = await supabase
-        .from('sale_listings')
-        .select('latitude, longitude')
-        .eq('id', input.id)
-        .single();
-      if (fetchError) throw fetchError;
-
-      await computeAndInsertMatches({
-        id: input.id,
-        latitude: listingRow.latitude,
-        longitude: listingRow.longitude,
-        startDate: input.startDate,
-        endDate: input.endDate,
-        description: input.description,
-        otherItems: input.otherItems,
-        categoryIds,
-      });
-    } catch (err) {
-      console.error('Failed to compute matches for published listing', err);
-    }
-    try {
-      await detectClusterForListing(input.id);
-    } catch (err) {
-      console.error('Failed to check for a nearby cluster', err);
-    }
+    await publishSaleListing({
+      id: input.id,
+      description: input.description,
+      otherItems: input.otherItems,
+      categoryIds,
+    });
   }
 }
 
 export async function cancelSaleListing(id: string): Promise<void> {
   const { error } = await supabase.from('sale_listings').update({ status: 'cancelled' }).eq('id', id);
   if (error) throw error;
+}
+
+// Applies a boost purchase to a specific listing — called immediately
+// after utils/purchases.ts's purchaseBoost() resolves successfully. See
+// supabase/migrations/0022_listing_boost.sql's header comment for why this
+// is a direct client-side write rather than something the RevenueCat
+// webhook triggers: the existing "Sellers can update their own listings"
+// RLS policy is what makes this safe (a client-only) approach — the update
+// simply fails to match any row if the caller isn't that listing's seller.
+// Always sets a fresh now()+48h expiry regardless of any existing boost —
+// per feature spec Section 10, re-boosting an already-boosted listing
+// extends/restarts the window rather than stacking or erroring.
+export async function applyListingBoost(listingId: string): Promise<string> {
+  const expiresAt = new Date(Date.now() + BOOST_DURATION_HOURS * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from('sale_listings')
+    .update({ is_boosted: true, boost_expires_at: expiresAt })
+    .eq('id', listingId)
+    .select('boost_expires_at')
+    .single();
+  // .single() throws its own PostgrestError if zero rows matched (e.g. the
+  // RLS check failed because this isn't actually the caller's listing) —
+  // surfacing that as a real error here matters more than for a typical
+  // update, since the user already paid for this to take effect.
+  if (error) throw error;
+  return data.boost_expires_at;
 }

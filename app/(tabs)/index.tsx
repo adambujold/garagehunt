@@ -18,14 +18,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Chip } from '@/components/garagehunt/chip';
 import { DiscoverAdCard } from '@/components/garagehunt/discover-ad-card';
 import { DiscoverMap } from '@/components/garagehunt/discover-map';
+import { EmptyStateCard } from '@/components/garagehunt/empty-state-card';
 import { EventCard } from '@/components/garagehunt/event-card';
 import { MockSale, SaleCard } from '@/components/garagehunt/sale-card';
+import { OnboardingTour } from '@/components/garagehunt/onboarding/onboarding-tour';
 import { ReviewPromptGate } from '@/components/garagehunt/review-prompt-gate';
 import { Colors, Fonts } from '@/constants/brand';
 import { CATEGORIES } from '@/constants/categories';
 import { useIsAdFree } from '@/hooks/use-ad-free';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useCurrentLocation } from '@/hooks/use-current-location';
+import { useSpotlightTarget } from '@/hooks/use-spotlight-target';
 import {
   matchesCategory,
   matchesNext7Days,
@@ -102,9 +105,15 @@ export default function DiscoverScreen() {
   const [listings, setListings] = useState<MockSale[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [nearbyEvents, setNearbyEvents] = useState<{ event: TownWideEvent; participantCount: number }[]>([]);
+  // Tracks whether the nearby-events lookup has settled at least once
+  // (success or failure) — OnboardingTour needs this before it can trust
+  // that a missing town-wide event card really means "none exist," not
+  // "haven't checked yet."
+  const [eventsChecked, setEventsChecked] = useState(false);
   const { coords } = useCurrentLocation();
   const { session } = useAuthSession();
   const isAdFree = useIsAdFree(session?.user.id);
+  const viewToggleSpotlight = useSpotlightTarget('view-toggle');
 
   // Expo Router keeps each tab's screen mounted in the background, so a
   // plain useEffect-on-mount would never refetch after publishing a new
@@ -132,7 +141,13 @@ export default function DiscoverScreen() {
   // independent means a slow/failed event lookup never blocks the sales list.
   useFocusEffect(
     useCallback(() => {
-      if (!coords) return;
+      if (!coords) {
+        // No location permission/fix — there's genuinely nothing to check,
+        // so this counts as "checked" too rather than leaving
+        // OnboardingTour waiting on a lookup that will never run.
+        setEventsChecked(true);
+        return;
+      }
       let cancelled = false;
       findNearbyEventsForBuyer(coords)
         .then(async (events) => {
@@ -144,7 +159,10 @@ export default function DiscoverScreen() {
           );
           if (!cancelled) setNearbyEvents(withCounts);
         })
-        .catch((err) => console.error('Failed to check for nearby town-wide events', err));
+        .catch((err) => console.error('Failed to check for nearby town-wide events', err))
+        .finally(() => {
+          if (!cancelled) setEventsChecked(true);
+        });
       return () => {
         cancelled = true;
       };
@@ -158,6 +176,16 @@ export default function DiscoverScreen() {
       if (isActive && filter === 'Other') setOtherKeyword('');
       return isActive ? current.filter((f) => f !== filter) : [...current, filter];
     });
+  };
+
+  // Used by the filtered-empty state's "Reset filters" action — clears
+  // every chip and the free-text queries so the buyer actually sees
+  // everything in radius again, not just back to the default "This
+  // weekend" chip (which is itself a filter that could still hide sales).
+  const handleResetFilters = () => {
+    setActiveFilters([]);
+    setSearchQuery('');
+    setOtherKeyword('');
   };
 
   // null while the initial fetch is still in flight; an empty active-filters
@@ -178,9 +206,6 @@ export default function DiscoverScreen() {
           </View>
           <Text style={styles.wordmark}>GarageHunt</Text>
         </View>
-        <Pressable style={styles.bellButton}>
-          <Ionicons name="notifications-outline" size={16} color={Colors.amberText} />
-        </Pressable>
       </View>
 
       <View style={styles.searchBar}>
@@ -226,11 +251,16 @@ export default function DiscoverScreen() {
         </View>
       )}
 
-      {nearbyEvents.map(({ event, participantCount }) => (
-        <EventCard key={event.id} event={event} participantCount={participantCount} />
+      {nearbyEvents.map(({ event, participantCount }, index) => (
+        <EventCard
+          key={event.id}
+          event={event}
+          participantCount={participantCount}
+          spotlightId={index === 0 ? 'event-card' : undefined}
+        />
       ))}
 
-      <View style={styles.viewToggleRow}>
+      <View ref={viewToggleSpotlight.ref} onLayout={viewToggleSpotlight.onLayout} style={styles.viewToggleRow}>
         <Pressable
           onPress={() => setViewMode('map')}
           style={[styles.viewToggle, viewMode === 'map' && styles.viewToggleActive]}>
@@ -288,20 +318,47 @@ export default function DiscoverScreen() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <ReviewPromptGate />
+      {session && <OnboardingTour userId={session.user.id} ready={listings !== null && eventsChecked} />}
       <FlatList<FeedItem>
         style={styles.list}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
         data={buildFeedItems(filteredListings ?? [], !isAdFree)}
         keyExtractor={(item) => (item.kind === 'listing' ? item.sale.id : item.key)}
-        renderItem={({ item }) => (item.kind === 'listing' ? <SaleCard sale={item.sale} /> : <DiscoverAdCard />)}
+        renderItem={({ item, index }) =>
+          item.kind === 'listing' ? (
+            <SaleCard sale={item.sale} spotlightId={index === 0 ? 'sale-card-heart' : undefined} />
+          ) : (
+            <DiscoverAdCard />
+          )
+        }
         ListHeaderComponent={header}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>
-            {activeFilters.length > 0 && (listings?.length ?? 0) > 0
-              ? 'No sales match these filters.'
-              : 'No sales listed yet — be the first to list one!'}
-          </Text>
+          // Genuine cold-start (nothing exists in radius at all, regardless
+          // of which filters happen to be active) vs. filtered-empty
+          // (real listings exist, the buyer's filters/search just exclude
+          // all of them right now) — feature spec Section 4a is explicit
+          // these need two different messages, since the "be the first"
+          // invitation would be actively misleading in the second case.
+          (listings?.length ?? 0) === 0 ? (
+            <EmptyStateCard
+              tagLabel="Be the first!"
+              tagVariant="new"
+              heading="No sales here yet — be the first!"
+              subtext="List yours and put this area on the map."
+              ctaLabel="+ List a Sale"
+              onPressCta={() => router.push('/list-sale')}
+            />
+          ) : (
+            <EmptyStateCard
+              tagLabel="No matches"
+              tagVariant="category"
+              heading="No sales match your filters"
+              subtext="Try loosening your filters or search to see what's nearby."
+              ctaLabel="Reset filters"
+              onPressCta={handleResetFilters}
+            />
+          )
         }
       />
     </SafeAreaView>
@@ -333,13 +390,6 @@ const styles = StyleSheet.create({
     color: Colors.muted,
     textAlign: 'center',
   },
-  emptyText: {
-    fontFamily: Fonts.body,
-    fontSize: 13,
-    color: Colors.muted,
-    textAlign: 'center',
-    paddingVertical: 24,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -365,14 +415,6 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.displaySemiBold,
     fontSize: 17,
     color: Colors.ink,
-  },
-  bellButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.amberBg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   searchBar: {
     flexDirection: 'row',

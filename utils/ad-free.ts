@@ -20,7 +20,13 @@ export async function fetchIsAdFree(userId: string): Promise<boolean> {
     .from('users')
     .select('is_ad_free, ad_free_expires_at')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
   if (error) throw error;
-  return deriveIsAdFree(data.is_ad_free, data.ad_free_expires_at);
+  // No row (e.g. a signed-in auth.users account whose public.users row
+  // hasn't been created/backfilled yet) defaults to not-ad-free rather than
+  // erroring — same "missing row = default state" treatment used
+  // everywhere else in this codebase (fetchAvatarUrl, fetchBuyerCheckinCount,
+  // fetchIsVerifiedOrganizer, etc.), matching .single()'s known
+  // PGRST116-on-zero-rows failure mode.
+  return data ? deriveIsAdFree(data.is_ad_free, data.ad_free_expires_at) : false;
 }

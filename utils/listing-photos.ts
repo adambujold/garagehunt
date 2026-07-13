@@ -1,12 +1,12 @@
 import { File } from 'expo-file-system';
 
+import { moderateListingPhoto } from '@/utils/moderation';
 import { supabase } from '@/utils/supabase';
 
 // Mirrors listing_photos from supabase/migrations/0001_sale_listings_schema.sql
 // (storage_key, sort_order, moderation_status) plus the Storage bucket and
-// RLS policies added in 0005_listing_photos_storage.sql. Actual image
-// content screening (moderation_status beyond its 'pending' default) is a
-// separate backend-dependent task — feature spec Section 9 — not handled here.
+// RLS policies added in 0005_listing_photos_storage.sql. Image content
+// screening (feature spec Section 9, item 1) runs on every upload, below.
 
 const PHOTO_BUCKET = 'listing-photos';
 export const MAX_LISTING_PHOTOS = 10;
@@ -79,14 +79,30 @@ export async function uploadListingPhoto(listingId: string, localUri: string, so
     throw new Error('That photo could not be read. Please try again.');
   }
 
+  // Classified before anything touches Storage — a rejected photo is never
+  // uploaded at all, not uploaded-then-deleted. Read as base64 separately
+  // from the arrayBuffer above (a second local read, not a second network
+  // round trip) since that's the format Claude's vision API takes.
+  const imageBase64 = await new File(localUri).base64();
+  const decision = await moderateListingPhoto(imageBase64, contentType);
+  if (decision === 'reject') {
+    throw new Error("That photo doesn't meet our content guidelines. Please choose a different photo.");
+  }
+
   const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(storageKey, arrayBuffer, {
     contentType,
   });
   if (uploadError) throw uploadError;
 
+  // 'flag' maps to the schema's existing 'pending' value (awaiting manual
+  // review); 'approve' maps to 'approved'. Explicit either way, rather than
+  // relying on the column's 'pending' default, so this stays correct if
+  // that default ever changes.
+  const moderationStatus = decision === 'approve' ? 'approved' : 'pending';
+
   const { data, error: insertError } = await supabase
     .from('listing_photos')
-    .insert({ listing_id: listingId, storage_key: storageKey, sort_order: sortOrder })
+    .insert({ listing_id: listingId, storage_key: storageKey, sort_order: sortOrder, moderation_status: moderationStatus })
     .select('id, storage_key, sort_order')
     .single();
 

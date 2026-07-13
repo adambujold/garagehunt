@@ -17,9 +17,12 @@ export async function getNotificationsEnabled(userId: string): Promise<boolean> 
     .from('users')
     .select('notification_prefs')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
   if (error) throw error;
-  return data.notification_prefs?.push_enabled ?? true;
+  // No row (a signed-in auth.users account without a public.users row yet)
+  // defaults to enabled — .single() would instead throw PGRST116 on this
+  // exact case, same failure mode fixed in utils/ad-free.ts.
+  return data?.notification_prefs?.push_enabled ?? true;
 }
 
 export async function setNotificationsEnabled(userId: string, enabled: boolean): Promise<void> {

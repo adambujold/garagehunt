@@ -126,7 +126,9 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.coral,
+    // Colors.danger, not the primary coral — a permanent, undoable action
+    // shouldn't carry the same "happy" weight as Publish/Continue/Sign in.
+    backgroundColor: Colors.danger,
     borderRadius: 12,
     paddingVertical: 12,
   },
@@ -138,7 +140,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontFamily: Fonts.body,
     fontSize: 11,
-    color: Colors.coral,
+    color: Colors.errorText,
     textAlign: 'center',
     marginTop: 12,
   },

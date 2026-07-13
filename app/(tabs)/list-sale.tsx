@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -9,6 +9,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -17,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AddressPreviewMap } from '@/components/garagehunt/address-preview-map';
 import { AiSuggestionModal } from '@/components/garagehunt/ai-suggestion-modal';
 import { Chip } from '@/components/garagehunt/chip';
 import { OtherCategoryField } from '@/components/garagehunt/other-category-field';
@@ -26,12 +28,20 @@ import { Colors, Fonts } from '@/constants/brand';
 import { CATEGORIES } from '@/constants/categories';
 import { DEFAULT_MAP_REGION } from '@/constants/map';
 import { useAuthSession } from '@/hooks/use-auth-session';
-import { useCurrentLocation } from '@/hooks/use-current-location';
+import { Coordinates, useCurrentLocation } from '@/hooks/use-current-location';
+import { buildSaleDeepLink } from '@/utils/deep-links';
 import { getErrorMessage } from '@/utils/get-error-message';
 import { MAX_LISTING_PHOTOS, uploadListingPhoto } from '@/utils/listing-photos';
+import {
+  AddressSuggestion,
+  createSearchSessionToken,
+  retrieveAddress,
+  suggestAddresses,
+} from '@/utils/mapbox-address-search';
+import { geocodeAddress } from '@/utils/mapbox-geocoding';
 import { formatDisplayDate, parseDisplayDate, parseDisplayTimeRange } from '@/utils/parse-sale-form-input';
 import { pickListingPhoto, takeListingPhoto } from '@/utils/pick-listing-photo';
-import { createSaleListing } from '@/utils/sale-listings';
+import { createSaleListing, publishSaleListing } from '@/utils/sale-listings';
 import {
   fetchEventParticipantCount,
   findNearbyEvent,
@@ -48,12 +58,31 @@ export default function ListSaleScreen() {
   const { coords } = useCurrentLocation();
   const [step, setStep] = useState(1);
   const [published, setPublished] = useState(false);
+  const [publishedListingId, setPublishedListingId] = useState<string | null>(null);
   const [draftSaved, setDraftSaved] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
 
-  const [address, setAddress] = useState('42 Maple Street, London');
+  const [address, setAddress] = useState('');
+  // Set only when the seller picks a suggestion from the autocomplete
+  // dropdown — lets publish/save-draft skip a redundant geocode call for the
+  // exact address Mapbox already resolved. Cleared on any further typing
+  // (see handleAddressChange) since the address text no longer necessarily
+  // matches these coordinates once edited.
+  const [selectedCoords, setSelectedCoords] = useState<Coordinates | null>(null);
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [addressSuggestionsLoading, setAddressSuggestionsLoading] = useState(false);
+  const [isAddressFocused, setIsAddressFocused] = useState(false);
+  // A fresh token per typing session (new query after a prior selection),
+  // not per keystroke — see createSearchSessionToken's header comment.
+  const searchSessionTokenRef = useRef(createSearchSessionToken());
+  // Delays hiding the dropdown on blur just long enough for a suggestion's
+  // onPress to register first — otherwise the dropdown unmounts (since it's
+  // gated on isAddressFocused) before the tap completes, and the press is
+  // lost. keyboardShouldPersistTaps="handled" on the ScrollView below
+  // doesn't cover this specific TextInput-blur-vs-Pressable-tap race.
+  const addressBlurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Mirrors sale_listings.start_date/end_date — equal values represent a
   // single-day sale, per the feature spec (Section 3, step 3).
   const [startDate, setStartDate] = useState('Sat, Jul 11');
@@ -131,6 +160,64 @@ export default function ListSaleScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
+  // Live address autocomplete — debounced so every keystroke doesn't fire
+  // its own request. Only searches while the field is actually focused, so
+  // programmatic address changes elsewhere (resetForm, selecting a
+  // suggestion) don't trigger a pointless extra lookup.
+  useEffect(() => {
+    if (!isAddressFocused) return;
+    const trimmed = address.trim();
+    if (trimmed.length < 3) {
+      setAddressSuggestions([]);
+      setAddressSuggestionsLoading(false);
+      return;
+    }
+    setAddressSuggestionsLoading(true);
+    const timeout = setTimeout(() => {
+      suggestAddresses(trimmed, searchSessionTokenRef.current, coords ?? undefined)
+        .then(setAddressSuggestions)
+        .catch((err) => {
+          console.error('Failed to fetch address suggestions', err);
+          setAddressSuggestions([]);
+        })
+        .finally(() => setAddressSuggestionsLoading(false));
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [address, isAddressFocused, coords]);
+
+  const handleAddressChange = (text: string) => {
+    setAddress(text);
+    setSelectedCoords(null);
+  };
+
+  const handleAddressFocus = () => {
+    if (addressBlurTimeoutRef.current) clearTimeout(addressBlurTimeoutRef.current);
+    setIsAddressFocused(true);
+  };
+
+  const handleAddressBlur = () => {
+    addressBlurTimeoutRef.current = setTimeout(() => setIsAddressFocused(false), 150);
+  };
+
+  const handleSelectAddressSuggestion = async (suggestion: AddressSuggestion) => {
+    setIsAddressFocused(false);
+    setAddressSuggestions([]);
+    Keyboard.dismiss();
+    try {
+      const result = await retrieveAddress(suggestion.id, searchSessionTokenRef.current);
+      setAddress(result.address);
+      setSelectedCoords(result.coordinates);
+    } catch (err) {
+      // Falls back to whatever text is already in the field — publish/save
+      // still geocode it the normal way, so this isn't fatal to the flow.
+      console.error('Failed to retrieve selected address', err);
+    } finally {
+      // Selecting an address ends this typing session per Mapbox's session
+      // model — the next query starts a new one.
+      searchSessionTokenRef.current = createSearchSessionToken();
+    }
+  };
+
   const toggleCategory = (category: string) => {
     setCategories((current) => {
       const isActive = current.includes(category);
@@ -199,9 +286,11 @@ export default function ListSaleScreen() {
   const resetForm = () => {
     setStep(1);
     setPublished(false);
+    setPublishedListingId(null);
     setDraftSaved(false);
     setPublishError(null);
-    setAddress('42 Maple Street, London');
+    setAddress('');
+    setSelectedCoords(null);
     setStartDate('Sat, Jul 11');
     setEndDate('Sat, Jul 11');
     setTime('9am–2pm');
@@ -228,15 +317,26 @@ export default function ListSaleScreen() {
       const startDateIso = parseDisplayDate(startDate);
       const endDateIso = parseDisplayDate(endDate);
       const { startTime, endTime } = parseDisplayTimeRange(time);
-      const origin = coords ?? {
-        latitude: DEFAULT_MAP_REGION.latitude,
-        longitude: DEFAULT_MAP_REGION.longitude,
-      };
+      // A live public listing needs its real address geocoded, not the
+      // seller's live GPS position — those only coincide if the seller
+      // happens to be standing at the sale address when they hit Publish.
+      // Left to throw and block publish on failure (rather than falling
+      // back to device GPS) since a wrong-location live listing is worse
+      // than being asked to fix the address first. Skipped entirely when
+      // the seller picked a suggestion from the autocomplete dropdown —
+      // Mapbox already resolved exact coordinates for that address at
+      // selection time, so re-geocoding the same text would just be a
+      // redundant network call for the same result.
+      const geocoded = selectedCoords ?? (await geocodeAddress(address, coords ?? undefined));
 
-      const listingId = await createSaleListing({
+      // Always created as a draft first — publishSaleListing below is the
+      // only path allowed to flip it to published, since photos need to
+      // already be uploaded and classified before that moderation gate can
+      // evaluate them (feature spec Section 9).
+      const { id: listingId, categoryIds } = await createSaleListing({
         sellerId: session.user.id,
-        latitude: origin.latitude,
-        longitude: origin.longitude,
+        latitude: geocoded.latitude,
+        longitude: geocoded.longitude,
         addressText: address,
         immediateRevealOptIn: showExactAddress,
         startDate: startDateIso,
@@ -247,9 +347,13 @@ export default function ListSaleScreen() {
         description,
         otherItems,
         categoryNames: categories,
-        status: 'published',
       });
       await uploadPendingPhotos(listingId);
+      // If this throws (a photo's still pending review, or the description
+      // got flagged/rejected), the listing stays saved as a draft — the
+      // error banner below surfaces exactly why, and My Listings already
+      // shows drafts with a "Finish listing" prompt either way.
+      await publishSaleListing({ id: listingId, description, otherItems, categoryIds });
       try {
         await submitPendingEventJoinRequest(listingId, session.user.id);
       } catch (err) {
@@ -259,6 +363,7 @@ export default function ListSaleScreen() {
         console.error('Failed to submit event join request', err);
       }
 
+      setPublishedListingId(listingId);
       setPublished(true);
     } catch (err) {
       console.error('Failed to publish sale', err);
@@ -287,11 +392,18 @@ export default function ListSaleScreen() {
         latitude: DEFAULT_MAP_REGION.latitude,
         longitude: DEFAULT_MAP_REGION.longitude,
       };
+      // Best-effort geocode for a draft — unlike Publish, this shouldn't
+      // block saving over an address the seller hasn't finished typing yet
+      // (drafts are private WIP, never shown to buyers), so a failed geocode
+      // just falls back to device GPS for now rather than throwing; the real
+      // address gets properly geocoded once they publish for real. Same
+      // autocomplete-selection skip as handlePublish above.
+      const geocoded = selectedCoords ?? (await geocodeAddress(address, coords ?? undefined).catch(() => origin));
 
-      const listingId = await createSaleListing({
+      const { id: listingId } = await createSaleListing({
         sellerId: session.user.id,
-        latitude: origin.latitude,
-        longitude: origin.longitude,
+        latitude: geocoded.latitude,
+        longitude: geocoded.longitude,
         addressText: address,
         immediateRevealOptIn: showExactAddress,
         startDate: startDateIso,
@@ -302,7 +414,6 @@ export default function ListSaleScreen() {
         description,
         otherItems,
         categoryNames: categories,
-        status: 'draft',
       });
       await uploadPendingPhotos(listingId);
       try {
@@ -336,6 +447,17 @@ export default function ListSaleScreen() {
 
   const dateRangeLabel = startDate === endDate ? startDate : `${startDate} – ${endDate}`;
 
+  const handleShareSale = async () => {
+    if (!publishedListingId) return;
+    try {
+      await Share.share({
+        message: `${title || 'My garage sale'}\n${dateRangeLabel} · ${time}\n\nCheck it out on GarageHunt: ${buildSaleDeepLink(publishedListingId)}`,
+      });
+    } catch (err) {
+      console.error('Failed to open share sheet', err);
+    }
+  };
+
   if (published) {
     return (
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -347,7 +469,7 @@ export default function ListSaleScreen() {
           <Text style={styles.successSubtitle}>
             {address} &middot; {dateRangeLabel} &middot; {time}
           </Text>
-          <Pressable style={styles.shareButton}>
+          <Pressable style={styles.shareButton} onPress={handleShareSale}>
             <Ionicons name="share-outline" size={14} color={Colors.mutedDark} />
             <Text style={styles.shareButtonLabel}>Share to social</Text>
           </Pressable>
@@ -416,16 +538,47 @@ export default function ListSaleScreen() {
               <Ionicons name="location-outline" size={14} color={Colors.muted} />
               <TextInput
                 value={address}
-                onChangeText={setAddress}
+                onChangeText={handleAddressChange}
+                onFocus={handleAddressFocus}
+                onBlur={handleAddressBlur}
                 style={styles.fieldInput}
                 placeholder="Street address"
                 placeholderTextColor={Colors.mutedLight}
               />
+              {selectedCoords && (
+                <Ionicons name="checkmark-circle" size={16} color={Colors.jade} />
+              )}
             </View>
 
-            <View style={styles.miniMap}>
-              <Ionicons name="location" size={22} color={Colors.coral} />
-            </View>
+            {isAddressFocused && address.trim().length >= 3 && (
+              <View style={styles.suggestionsBox}>
+                {addressSuggestionsLoading ? (
+                  <View style={styles.suggestionRow}>
+                    <ActivityIndicator size="small" color={Colors.muted} />
+                  </View>
+                ) : addressSuggestions.length > 0 ? (
+                  addressSuggestions.map((item) => (
+                    <Pressable
+                      key={item.id}
+                      style={styles.suggestionRow}
+                      onPress={() => handleSelectAddressSuggestion(item)}>
+                      <Ionicons name="location-outline" size={13} color={Colors.muted} />
+                      <Text style={styles.suggestionText} numberOfLines={1}>
+                        {item.label}
+                      </Text>
+                    </Pressable>
+                  ))
+                ) : (
+                  <View style={styles.suggestionRow}>
+                    <Text style={styles.suggestionEmptyText}>
+                      No matching addresses — you can still type it in manually.
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+
+            <AddressPreviewMap coordinates={selectedCoords ?? coords} />
 
             <Text style={styles.fieldLabel}>Date range</Text>
             <View style={styles.fieldRow}>
@@ -808,15 +961,35 @@ const styles = StyleSheet.create({
     marginTop: -6,
     marginBottom: 14,
   },
-  miniMap: {
-    height: 90,
-    borderRadius: 14,
-    backgroundColor: Colors.lavender,
+  suggestionsBox: {
+    backgroundColor: '#fff',
     borderWidth: 2,
-    borderColor: Colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: Colors.tan,
+    borderRadius: 12,
+    marginTop: -8,
     marginBottom: 14,
+    overflow: 'hidden',
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.tan,
+  },
+  suggestionText: {
+    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    color: Colors.ink,
+  },
+  suggestionEmptyText: {
+    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    color: Colors.muted,
   },
   toggleRow: {
     flexDirection: 'row',

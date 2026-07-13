@@ -17,10 +17,27 @@
 
 ## 2. Onboarding Flow
 
-1. Download app → Sign up (email, phone, or social login)
+1. Download app → Sign up (email, phone, or social login) — **includes a required "I agree to the Terms of Service and Privacy Policy" checkbox**, unchecked by default, with tappable links to both real hosted documents. "Create account" stays disabled until checked. Acceptance is recorded (timestamp + which terms version) at the moment of signup — a real record for legal defensibility if the Terms are ever updated later, not just a UI gate.
 2. Choose home location (postal code / city) — sets default map center & notification radius
 3. Optional: choose interests (categories they usually shop for) — powers personalized alerts later
-4. Land on **Map/Discover** home screen
+4. **First-time guided tour** — a hybrid spotlight/bubble tour, shown once ever (never again after completion or skip), covering every major exciting piece of the app rather than a generic "here's the app" intro. Two parts:
+
+   **Part A — live spotlight on the real Discover screen** (dims the background, circles/highlights the actual real element, tooltip bubble, "Next"): things that are always present regardless of how new the account is, so there's always something real to point at.
+   - Bottom tab bar, one stop per tab: **Discover**, **I'm Looking For**, **List a Sale**, **Profile**
+   - The **map itself** — "Every sale near you, live"
+   - The **map/list toggle**
+   - A sample listing card's **heart/favorite icon** — "Favorite the ones you don't want to miss — enough interest and a listing goes 🔥 Hot"
+   - The **town-wide event card** (purple, at the top of Discover) — "One card, dozens of sales — team up with neighbors and find the whole event without hunting down each seller one by one" (directly per your callout — town-wide events are joinable/discoverable as one unit, not something you need to already know individual sellers to find)
+   - The **"Plan my route"** button — "Let the app map your whole Saturday, or build your own stop by stop"
+
+   **Part B — illustrated concept cards** (floating cards, not tied to real on-screen data, since a brand-new account has none yet): the exciting mechanics that need something to already exist to demonstrate live.
+   - **Hot Listing tiers** — the 🔥 → 🔥🔥 → 🔥🔥🔥 escalation, framed as real momentum sellers can watch build
+   - **Shopper tiers & check-ins** — Regular → Trusted Shopper → Super Shopper, earned by GPS-verified check-ins at real sales
+   - **"I'm Looking For" + notifications** — set it once, get pushed the moment something matching shows up nearby, no more manually checking
+   - **Trust & safety** — verified reviews, GPS-confirmed check-ins, and address-reveal timing that protects sellers — a quick "this is a real community, not just a marketplace" beat
+
+   **Skip** available on every screen of both parts; final card's action reads "Get Started," not "Next."
+5. Land on **Map/Discover** home screen
 
 ---
 
@@ -29,7 +46,7 @@
 **Goal:** Get a sale live in under 3 minutes.
 
 1. Tap **"+ List a Sale"**
-2. **Location** — auto-pulled from device GPS or manually entered address (street-level, not exact pin optional for privacy until day-of)
+2. **Location** — auto-pulled from device GPS or manually entered address (street-level, not exact pin optional for privacy until day-of). **Manual entry uses live address autocomplete** as the seller types (via Mapbox's Search API), showing real matching addresses to pick from — reduces typos and speeds up entry, same principle as any modern address form.
 3. **Date range & time** — a start date and end date (e.g., Sat–Sun), with one shared daily time window (e.g., 9am–2pm) applied across every day in the range. A single-day sale is simply a range where start date = end date — no separate "add another day" step needed.
 4. **Photos** — upload up to 10 (teaser shots of items, signage, etc.)
 5. **Categories carried** — multi-select tags:
@@ -55,6 +72,10 @@
 - Toggle: **List view** vs **Map view**
 - Filters: date (today/this weekend/custom), category, distance, "town-wide events only"
 - Each pin/card shows: thumbnail photo, distance, categories, time window
+
+**Two distinct empty states, not one generic message:**
+- **Genuine cold-start** (zero listings exist in the radius at all, no filters applied) — this is the real "new market, day one" moment, and the default "no results" message undersells it badly. Instead: an inviting call to action — *"No sales here yet — be the first!"* / *"List yours and put [area name] on the map."* — with a prominent **"+ List a Sale"** button directly in the empty state, not buried in the tab bar. Turns a dead end into the exact action that fixes the problem for everyone after them.
+- **Filtered-empty** (listings exist in the radius, but the buyer's active filters exclude all of them) — a completely different message: *"No sales match your filters"* with a clear way to reset/loosen them. Showing the "be the first" invitation here would be actively wrong — sales exist, they're just filtered out.
 
 ### 4b. Route Planning — Two Modes
 **Mode 1: Manual Pick**
@@ -96,6 +117,7 @@ Both modes end in the same **Route Summary** screen: ordered stop list, total di
   
   Each tier increases visual intensity (more fire emoji, bolder text, a thicker/more saturated tag border) while staying the same masking-tape tag shape as every other badge — escalating, not a different design per tier. These are launch thresholds, tunable later like everything else in this system.
 - **Seller-facing progress indicator:** on **My Listings**, a seller's own listing below the *next* tier shows a progress note near the interest count — e.g., *"14 interested · 12 more for 🔥🔥 Blazing Hot"* once Hot Listing is already reached, not just before the first tier. Once Inferno Hot is reached, no further progress note is needed. This is seller-facing only (My Listings, not the public Discover/Sale Detail views) — buyers don't need to see "how close" a sale is, only its current tier.
+- **Proactive push notification on tier crossing:** the seller gets pushed the moment their listing genuinely crosses a new tier ("🔥 Your listing just went Hot!") — this shouldn't be something they only discover by happening to open the app. Fires only once per tier per listing, even if the favorite count later fluctuates back down and up around that same threshold.
 
 **Post-sale reviews:**
 1. When a listing's status flips to `ended`, roughly a day later, everyone who favorited that listing gets a push notification: *"How was [seller]'s sale on Maple Street?"*
@@ -160,7 +182,7 @@ A second path into a town-wide event, distinct from the formal organizer flow ab
 Previously a placeholder ("coming soon"); now specified properly, since it's more than an account settings page — it's also where a seller plans ahead and sees cluster opportunities.
 
 **Standard account info:**
-- Display name, avatar/photo
+- Display name, **avatar/photo** — tappable, opens the same photo picker pattern already used for listings (library or camera), uploads to a dedicated Storage bucket. Falls back to the existing initials-in-a-circle treatment when no photo has been set — this isn't a replacement for that fallback, just an upgrade path on top of it.
 - Home location/area (used for default map center and radius — editable)
 - Contact info (email/phone on file)
 - Member since date
@@ -235,17 +257,18 @@ The choice is logged as an explicit, seller-initiated action (useful for account
 
 ## 9. Moderation — Decision
 
-All of the following are included in MVP or Phase 1 build:
+Items 3, 5, 6 (organizer portion), and 7 below are already built. This pass closes the remaining gap: items 1, 2, 4, and the buyer-listing portion of 6.
 
-1. **Automated photo screening** on upload (image moderation API) to catch explicit/inappropriate content before a listing goes live.
-2. **Automated text screening** on the description field — profanity/spam filter, plus pattern-flagging for common scam language (e.g., requests for e-transfer deposits, "ship to me" requests — atypical for a local garage sale).
-3. **User reporting** on both listings and individual photos, with categories: inappropriate content, scam, wrong/fake address, fake listing.
-4. **Manual review queue** for anything auto-flagged or user-reported — same-day turnaround target given listings are time-sensitive.
-5. **Organizer verification** includes an actual identity check (not just email verification), given organizers get elevated permissions (creating events, managing multiple sellers).
-6. **Account-level trust signals** — a new account's first listing gets a light review pass before publishing; established accounts with a clean history publish instantly.
-7. **Organizer approval process** — at launch/low volume, handled manually rather than through a paid ID-verification service:
+1. **Automated photo screening** on upload — **reuses the existing Anthropic API integration** (already paid for and wired up via Edge Function for AI-assisted listing descriptions) rather than adding a separate vendor like Google Cloud Vision. Claude's vision capability classifies each uploaded photo; clearly inappropriate content is rejected at upload time, borderline/uncertain cases are flagged for manual review rather than auto-rejected.
+2. **Automated text screening** on the description field — same reuse principle: the description is sent to the Anthropic API with a moderation-classification prompt (distinct from the AI-suggestion prompt, but the same underlying integration). Clearly bad content (hate speech, obvious scam scripts like "send an e-transfer deposit") blocks submission synchronously with a clear error message. Borderline content is allowed through but flagged for review, not silently blocked — false positives shouldn't prevent a legitimate seller from publishing.
+3. **User reporting** — ✅ already built (listings + photos, categorized reasons).
+4. **Manual review queue** — deliberately **not** a custom in-app admin UI, same pragmatic choice already made for organizer applications: flagged listings/photos/reports are reviewable directly in the Supabase dashboard (Table Editor, filtered by `moderation_status = 'pending_review'` or `reports.status = 'open'`). Building a dedicated review-queue screen isn't worth the effort at solo-reviewer, low-volume scale — revisit if/when review volume genuinely outgrows checking a filtered table view directly.
+5. **Organizer verification** — ✅ already built (Section 7 below).
+6. **Account-level trust signals** — a new account's **first-ever listing** is always flagged for manual review regardless of what automated screening returns, even if screening finds nothing wrong — an extra caution layer specifically for unproven accounts. Established accounts with a clean history publish instantly once past their first listing.
+7. **Organizer approval process** — ✅ already built, see below.
    - Applicant submits: full name, SMS-verified phone (reused from signup), the neighborhood/association they represent, and either a formal affiliation (resident association, BIA) or informal vouching (names of neighbors, link to an existing community group/listserv).
    - A person on the team manually reviews and approves — realistic at low application volume, avoids the cost/integration effort of a paid identity-verification API (e.g., Stripe Identity, Persona) before it's actually needed.
+   - **Admin notification on new application:** a real gap identified and fixed during real-device testing — without this, nothing would ever alert the team that a new application exists to review. On submit, an email is sent (via Resend — see technical architecture doc) to the team's review address, so applications don't just sit invisibly in the database waiting to be noticed.
    - Approved organizers get `is_verified_organizer` flipped in the data model.
    - **For the London launch specifically:** consider proactively inviting a few known neighborhood associations/BIAs to be first organizers rather than waiting on inbound applications — removes verification ambiguity and seeds the map with real events on day one.
    - **Revisit at scale:** once operating beyond markets the team can personally vet, replace manual review with a lightweight automated check (phone + email + basic ID scan via a pay-per-verification API), since cost there is usage-based and scales with growth.
@@ -281,7 +304,7 @@ Before launch, the app needs a **Terms of Service / User Agreement presented at 
 
 **Status:** Not yet drafted. **Needs professional legal review before use** — a drafted version can serve as a starting point for a lawyer, but should not be treated as launch-ready on its own.
 
-**Related pre-launch checklist item:** Supabase email confirmation was disabled during development for faster testing (Authentication → Providers → Email → "Confirm email" toggled off). **Must be re-enabled before real launch** — without it, anyone can sign up with a fake, non-existent email address.
+**Related pre-launch checklist item — ✅ Resolved.** Supabase email confirmation was disabled during development for faster testing, then re-enabled once real device testing (TestFlight, Play Closed Testing) was underway. New signups now require clicking a real confirmation link before signing in — including future test accounts, so use a real accessible inbox (Gmail's `+` alias trick, e.g. `adambujold+test1@gmail.com`, still works well for this).
 
 ---
 
@@ -293,7 +316,18 @@ Before launch, the app needs a **Terms of Service / User Agreement presented at 
 
 ---
 
-## 13. Companion Website
+## 12b. Sharing & Invites
+
+Identified as a gap during the pre-testing polish pass — only a generic native share button existed (Sale Detail), with no real deep linking or invite mechanic. Scoped deliberately to **sharing/invite only, not referral rewards** — a rewards system (e.g., "invite 3, get a free boost") is a genuinely bigger feature (fraud prevention, signup attribution, reward fulfillment) that would need its own design pass later, not bundled into this one.
+
+**Deep linking approach:** a custom URL scheme (`garagehunt://...`), not full Universal Links. Universal Links (normal `https://` links that open the app if installed and fall back to a real webpage if not) need actual domain hosting and verification files at a real production domain — since there's no live web hosting yet beyond the GitHub Pages legal docs, that upgrade naturally belongs with the Companion Website work already tracked (Section 13), not built as disconnected infrastructure now.
+
+**Three concrete pieces:**
+1. **Sale Detail sharing, upgraded:** the existing native share sheet now includes a real deep link (`garagehunt://sale/[id]`) alongside a friendly branded message (listing title, date, distance), not just a bare share action.
+2. **Route sharing:** a "Share my route" action on the Route Summary screen — a formatted message listing every stop (each with its own deep link) framed as an invitation, e.g., *"Come hunt with me this Saturday! 🔥"*
+3. **Invite a friend (generic):** a share action, likely on Profile, promoting the app itself with the brand voice — *"Join me on GarageHunt — Canada's weekend treasure hunt 🔥"* — **honest limitation:** since the app isn't publicly live on either store yet, this can't include a real download link today; ship the messaging now and add the real store link the moment the app actually goes public.
+
+---
 
 **Scope decision:** Full parity with the app — not a stripped-down public browsing tool. Sellers and buyers should be able to do everything on the website that they can do in the app: register/login, list a sale, browse/route-plan, use matching/alerts, and (for verified organizers) manage events.
 
@@ -305,3 +339,16 @@ Before launch, the app needs a **Terms of Service / User Agreement presented at 
 - **Maps** use Mapbox GL JS (the web SDK) instead of the mobile Maps SDK — same underlying Mapbox account and data, different library.
 - **Layout** needs real responsive design — the mobile mockups we built are single-column, phone-width; the website needs wider desktop layouts (e.g., map + list side-by-side rather than stacked/toggled).
 - **SEO** matters even with full parity — individual sale detail pages and town-wide event pages should be crawlable/indexable (with fuzzed location data pre-reveal, consistent with the privacy rules) since organic search is a realistic discovery channel for "garage sales near me"-type queries, independent of the login-gated features.
+
+---
+
+## 14. Pre-Testing Polish Pass
+
+Identified in a strategic review once core functionality was complete — none of these block anything already built, but all are worth doing before inviting real outside testers, since they're specifically about making the app feel exciting and complete, not just functional.
+
+1. **Route Planner Auto-Suggest mode** — designed since early in this project (Section 4b, Mode 2), never actually built. Only manual pick exists today.
+2. **First-time onboarding** — no introduction to Hot Listings, shopper tiers, or the treasure-hunt framing currently exists; a new user lands straight on Discover with zero context.
+3. **Cold-start empty states** — a brand-new market with no sales nearby currently just shows "nothing here." Should instead actively invite the viewer to be the first seller.
+4. **Proactive Hot Listing push notifications** — a listing crossing a tier threshold is currently only visible if the seller happens to open the app; should trigger a push ("🔥 Your listing just went Hot!") for re-engagement.
+5. **Sharing/referral loop** — only a generic native share button exists today; no "invite a friend to hunt with you" or shareable-route mechanic.
+6. **Final visual consistency audit** — several screens (Profile/avatar, delete-account modal, boost/Featured badges) were built directly by Claude Code later in the project without a fresh visual mockup pass; worth a full pass confirming everything still matches the masking-tape brand system consistently.

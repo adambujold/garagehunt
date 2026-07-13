@@ -139,8 +139,16 @@ export async function backfillMatchesForSavedSearch(input: {
   const newListingIds = matchedListingIds.filter((id) => !alreadyMatchedIds.has(id));
   if (newListingIds.length === 0) return;
 
+  // is_backfill: true — these are pre-existing listings the user is only
+  // now matching because they just saved/edited this search, not a live
+  // "new listing just appeared" event. See migration 0029: a bulk insert
+  // here can be many rows at once (e.g. a broad search matching most
+  // categories), and the per-row notification trigger sending that many
+  // pushes in a burst is a confirmed real-device crash — backfilled matches
+  // skip the push entirely since the save flow already navigates the user
+  // straight to Matches for You right after this resolves.
   const { error: insertError } = await supabase.from('matches').insert(
-    newListingIds.map((listingId) => ({ saved_search_id: input.searchId, listing_id: listingId }))
+    newListingIds.map((listingId) => ({ saved_search_id: input.searchId, listing_id: listingId, is_backfill: true }))
   );
   if (insertError) throw insertError;
 }

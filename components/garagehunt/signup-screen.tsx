@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -16,15 +17,23 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Fonts } from '@/constants/brand';
+import { signInWithApple } from '@/utils/apple-auth';
 import { getErrorMessage } from '@/utils/get-error-message';
 import { signInWithGoogle } from '@/utils/google-auth';
 import { supabase } from '@/utils/supabase';
 
-// Real Supabase email/password and Google auth. display_name is stored in
-// the auth user's metadata for now — syncing it into a dedicated `users`
-// profile table (per the technical architecture doc) is a follow-up once
-// that table exists. Apple is still a visual placeholder — see
-// login-screen.tsx's header comment for why.
+// Bump this (and the corresponding hosted document) any time the Terms of
+// Service or Privacy Policy materially changes — a simple date string, not a
+// semver, since there's no automated versioning of the hosted HTML.
+const TERMS_VERSION = '2026-07-11';
+const PRIVACY_POLICY_URL = 'https://adambujold.github.io/garagehunt-legal/';
+const TERMS_OF_SERVICE_URL = 'https://adambujold.github.io/garagehunt-legal/terms.html';
+
+// Real Supabase email/password, Google, and Apple auth. display_name is
+// stored in the auth user's metadata for now — syncing it into a dedicated
+// `users` profile table (per the technical architecture doc) is a follow-up
+// once that table exists. Apple is iOS-only — see login-screen.tsx's header
+// comment for why.
 export function SignUpScreen({
   onNavigateToLogin,
 }: {
@@ -33,19 +42,34 @@ export function SignUpScreen({
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
+
+  const anyLoading = loading || googleLoading || appleLoading;
 
   const handleCreateAccount = async () => {
     setError(null);
     setInfoMessage(null);
     setLoading(true);
+    // terms_accepted_at/terms_version travel through auth metadata (read
+    // back out by the handle_new_auth_user trigger, see migration 0031) —
+    // not a direct client-side update to public.users, since that would
+    // silently no-op under RLS for the "check your email to confirm" path
+    // below, where there's no active session yet to satisfy auth.uid() = id.
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { display_name: name } },
+      options: {
+        data: {
+          display_name: name,
+          terms_accepted_at: new Date().toISOString(),
+          terms_version: TERMS_VERSION,
+        },
+      },
     });
     setLoading(false);
     if (signUpError) {
@@ -70,6 +94,19 @@ export function SignUpScreen({
     }
   };
 
+  const handleAppleSignIn = async () => {
+    setError(null);
+    setInfoMessage(null);
+    setAppleLoading(true);
+    try {
+      await signInWithApple();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Something went wrong signing in with Apple.'));
+    } finally {
+      setAppleLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -83,14 +120,20 @@ export function SignUpScreen({
           <Text style={styles.subtitle}>Sign up to start discovering sales near you</Text>
         </View>
 
-        {/* Non-functional until Sign in with Apple is wired up — see the
-            header comment. */}
-        <Pressable style={styles.appleButton}>
-          <Ionicons name="logo-apple" size={16} color="#fff" />
-          <Text style={styles.appleButtonLabel}>Continue with Apple</Text>
-        </Pressable>
+        {Platform.OS === 'ios' && (
+          <Pressable style={styles.appleButton} onPress={handleAppleSignIn} disabled={anyLoading}>
+            {appleLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="logo-apple" size={16} color="#fff" />
+                <Text style={styles.appleButtonLabel}>Continue with Apple</Text>
+              </>
+            )}
+          </Pressable>
+        )}
 
-        <Pressable style={styles.googleButton} onPress={handleGoogleSignIn} disabled={googleLoading || loading}>
+        <Pressable style={styles.googleButton} onPress={handleGoogleSignIn} disabled={anyLoading}>
           {googleLoading ? (
             <ActivityIndicator color={Colors.coral} />
           ) : (
@@ -154,9 +197,34 @@ export function SignUpScreen({
           />
         </View>
 
+        <View style={styles.termsRow}>
+          {/* The checkbox is its own Pressable, a sibling of the text below
+              — not a wrapper around it. Nesting the link Texts inside a
+              single row-wide Pressable let a link tap also toggle the
+              checkbox (confirmed live): React Native's native touch
+              responder system doesn't honor stopPropagation() the way DOM
+              click bubbling does, so this needed a structural fix, not an
+              event-handling one. */}
+          <Pressable onPress={() => setAgreedToTerms((current) => !current)} hitSlop={8}>
+            <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
+              {agreedToTerms && <Ionicons name="checkmark" size={12} color="#fff" />}
+            </View>
+          </Pressable>
+          <Text style={styles.termsText}>
+            I agree to the{' '}
+            <Text style={styles.termsLink} onPress={() => Linking.openURL(TERMS_OF_SERVICE_URL)}>
+              Terms of Service
+            </Text>{' '}
+            and{' '}
+            <Text style={styles.termsLink} onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}>
+              Privacy Policy
+            </Text>
+          </Text>
+        </View>
+
         {error && (
           <View style={styles.errorBanner}>
-            <Ionicons name="warning-outline" size={13} color="#B3261E" />
+            <Ionicons name="warning-outline" size={13} color={Colors.errorText} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
@@ -168,7 +236,10 @@ export function SignUpScreen({
           </View>
         )}
 
-        <Pressable style={styles.signUpButton} onPress={handleCreateAccount} disabled={loading || googleLoading}>
+        <Pressable
+          style={[styles.signUpButton, !agreedToTerms && styles.signUpButtonDisabled]}
+          onPress={handleCreateAccount}
+          disabled={anyLoading || !agreedToTerms}>
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
@@ -298,11 +369,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.ink,
   },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 14,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: Colors.tan,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkboxChecked: {
+    backgroundColor: Colors.coral,
+    borderColor: Colors.coral,
+  },
+  termsText: {
+    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    color: Colors.muted,
+    lineHeight: 17,
+  },
+  termsLink: {
+    fontFamily: Fonts.bodySemiBold,
+    color: Colors.violet,
+  },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FDECEA',
+    backgroundColor: Colors.errorBg,
     borderRadius: 10,
     padding: 10,
     marginBottom: 10,
@@ -311,7 +414,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: Fonts.body,
     fontSize: 11,
-    color: '#B3261E',
+    color: Colors.errorText,
   },
   infoBanner: {
     flexDirection: 'row',
@@ -335,6 +438,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 14,
     marginTop: 6,
+  },
+  signUpButtonDisabled: {
+    backgroundColor: Colors.mutedLight,
   },
   signUpButtonLabel: {
     fontFamily: Fonts.displaySemiBold,

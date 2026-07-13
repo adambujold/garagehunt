@@ -25,6 +25,7 @@ export const MOCK_SALES: MockSale[] = [
     sellerRating: 4.8,
     sellerReviewCount: 23,
     checkinCount: 0,
+    isBoosted: false,
   },
   {
     id: '2',
@@ -50,6 +51,7 @@ export const MOCK_SALES: MockSale[] = [
     sellerRating: null,
     sellerReviewCount: 0,
     checkinCount: 0,
+    isBoosted: false,
   },
   {
     id: '3',
@@ -75,6 +77,7 @@ export const MOCK_SALES: MockSale[] = [
     sellerRating: null,
     sellerReviewCount: 0,
     checkinCount: 0,
+    isBoosted: false,
   },
   {
     id: '4',
@@ -100,6 +103,7 @@ export const MOCK_SALES: MockSale[] = [
     sellerRating: 5.0,
     sellerReviewCount: 2,
     checkinCount: 0,
+    isBoosted: false,
   },
   {
     id: '5',
@@ -125,6 +129,7 @@ export const MOCK_SALES: MockSale[] = [
     sellerRating: null,
     sellerReviewCount: 0,
     checkinCount: 0,
+    isBoosted: false,
   },
   {
     id: '6',
@@ -150,5 +155,6 @@ export const MOCK_SALES: MockSale[] = [
     sellerRating: 4.2,
     sellerReviewCount: 5,
     checkinCount: 0,
+    isBoosted: false,
   },
 ];

@@ -13,6 +13,7 @@ import { MOCK_SALES } from '@/constants/mock-data';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { checkIn, isCheckedIn, isWithinCheckInRange } from '@/utils/check-ins';
+import { buildSaleDeepLink } from '@/utils/deep-links';
 import { addFavorite, isListingFavorited, removeFavorite } from '@/utils/favorites';
 import { formatSaleSchedule } from '@/utils/format-sale-schedule';
 import { deriveHotTier, HOT_TIER_LABELS } from '@/utils/hot-tier';
@@ -153,7 +154,7 @@ export default function SaleDetailScreen() {
     if (!sale) return;
     try {
       await Share.share({
-        message: `${sale.title}\n${formatSaleSchedule(sale)}\n\n${sale.description}`,
+        message: `${sale.title}\n${formatSaleSchedule(sale)} · ${sale.distanceKm}km away\n\nCheck it out on GarageHunt: ${buildSaleDeepLink(sale.id)}`,
       });
     } catch (err) {
       console.error('Failed to open share sheet', err);

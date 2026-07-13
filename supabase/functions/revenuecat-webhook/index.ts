@@ -1,12 +1,20 @@
-// GarageHunt — RevenueCat webhook receiver for the ad-free subscription
-// entitlement. See supabase/migrations/0021_ad_free_subscription.sql for the
-// columns this writes, and utils/purchases.ts for the client-side purchase
-// flow this is downstream of.
+// GarageHunt — RevenueCat webhook receiver. Handles two unrelated flows:
+//
+// 1. The ad-free subscription entitlement — see
+//    supabase/migrations/0021_ad_free_subscription.sql for the columns this
+//    writes, and utils/purchases.ts for the client-side purchase flow this
+//    is downstream of.
+// 2. Logging listing-boost purchases (a one-time consumable, RevenueCat
+//    event type NON_RENEWING_PURCHASE) into boost_purchases — see
+//    supabase/migrations/0022_listing_boost.sql's header comment for why
+//    this is a backend record only, not what actually applies the boost
+//    (utils/sale-listings.ts's applyListingBoost does that directly,
+//    client-side, right after the purchase resolves).
 //
 // Not called by the app directly — RevenueCat calls this on every
-// entitlement lifecycle event. There's no per-caller user JWT to scope
-// queries to (RevenueCat isn't a signed-in user), so this uses the service
-// role key, same reasoning as send-match-notification.
+// purchase/entitlement lifecycle event. There's no per-caller user JWT to
+// scope queries to (RevenueCat isn't a signed-in user), so this uses the
+// service role key, same reasoning as send-match-notification.
 //
 // ASSUMES the RevenueCat dashboard's entitlement identifier is exactly
 // `ad_free`, matching users.is_ad_free's naming. If you set it up under a
@@ -29,6 +37,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const ENTITLEMENT_ID = 'ad_free';
+const BOOST_PRODUCT_ID = 'com.garagehunt.app.boost';
 
 type RevenueCatEvent = {
   type: string;
@@ -36,6 +45,11 @@ type RevenueCatEvent = {
   entitlement_ids?: string[];
   entitlement_id?: string;
   expiration_at_ms?: number | null;
+  product_id?: string;
+  price_in_purchased_currency?: number;
+  currency?: string;
+  purchased_at_ms?: number;
+  transaction_id?: string;
 };
 
 type WebhookPayload = {
@@ -59,12 +73,39 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'Missing event.type or event.app_user_id.' }, 400);
   }
 
+  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+
+  // Boost purchases have no entitlement attached at all (see this file's
+  // header comment), so they're handled entirely separately from the
+  // ad-free branch below — best-effort logging only, never blocks/affects
+  // the actual boost (already applied client-side by the time this fires).
+  if (event.type === 'NON_RENEWING_PURCHASE' && event.product_id === BOOST_PRODUCT_ID) {
+    if (!event.transaction_id || !event.purchased_at_ms) {
+      return jsonResponse({ skipped: 'Missing transaction_id or purchased_at_ms.' }, 200);
+    }
+    const { error } = await supabase.from('boost_purchases').insert({
+      user_id: event.app_user_id,
+      product_id: event.product_id,
+      price: event.price_in_purchased_currency ?? null,
+      currency: event.currency ?? null,
+      transaction_id: event.transaction_id,
+      purchased_at: new Date(event.purchased_at_ms).toISOString(),
+    });
+    if (error) {
+      // Unique violation on transaction_id means this exact purchase was
+      // already logged (a RevenueCat retry) — not a real failure.
+      if (error.code === '23505') {
+        return jsonResponse({ skipped: 'Already logged.' }, 200);
+      }
+      return jsonResponse({ error: error.message }, 500);
+    }
+    return jsonResponse({ logged: event.transaction_id }, 200);
+  }
+
   const entitlementIds = event.entitlement_ids ?? (event.entitlement_id ? [event.entitlement_id] : []);
   if (!entitlementIds.includes(ENTITLEMENT_ID)) {
     return jsonResponse({ skipped: `Event does not involve the ${ENTITLEMENT_ID} entitlement.` }, 200);
   }
-
-  const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
   const expiresAt = event.expiration_at_ms ? new Date(event.expiration_at_ms).toISOString() : null;
 

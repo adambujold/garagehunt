@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { MockSale } from '@/components/garagehunt/sale-card';
 import { Colors, Fonts } from '@/constants/brand';
+import { useSpotlightTarget } from '@/hooks/use-spotlight-target';
 
 // react-native-maps has no web target, so web (including this preview) shows
 // a static illustration instead of crashing. The real MapView lives in
@@ -22,9 +23,11 @@ export function DiscoverMap({
   onPlanRoute?: () => void;
 }) {
   const previewSales = sales.slice(0, PIN_POSITIONS.length);
+  const mapSpotlight = useSpotlightTarget('map');
+  const planRouteSpotlight = useSpotlightTarget('plan-route-button');
 
   return (
-    <View style={styles.card}>
+    <View ref={mapSpotlight.ref} onLayout={mapSpotlight.onLayout} style={styles.card}>
       {previewSales.map((sale, index) => (
         <View
           key={sale.id}
@@ -39,7 +42,11 @@ export function DiscoverMap({
           <Text style={styles.pinLabel}>{sale.distanceKm}km</Text>
         </View>
       ))}
-      <Pressable style={styles.fab} onPress={onPlanRoute}>
+      <Pressable
+        ref={planRouteSpotlight.ref}
+        onLayout={planRouteSpotlight.onLayout}
+        style={styles.fab}
+        onPress={onPlanRoute}>
         <Ionicons name="navigate" size={12} color="#fff" />
         <Text style={styles.fabLabel}>Plan route</Text>
       </Pressable>

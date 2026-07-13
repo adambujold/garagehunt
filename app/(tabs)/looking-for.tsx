@@ -117,6 +117,15 @@ export default function LookingForScreen() {
       setSaveError('You need to be signed in to save a search.');
       return;
     }
+    // Dismissed here, not left implicit — this screen (unlike every other
+    // form in the app) navigates straight to a different screen right after
+    // an async save instead of showing an in-place success state. Giving the
+    // keyboard the full save round-trip to dismiss, rather than letting it
+    // still be mid-dismissal at the exact instant router.push fires, is a
+    // real-device crash fix (confirmed via crash log: an uncaught native
+    // exception on the TurboModule dispatch queue, happening on every save
+    // regardless of how much data comes back — not a data-scale issue).
+    Keyboard.dismiss();
     setSaveError(null);
     setSaving(true);
     try {

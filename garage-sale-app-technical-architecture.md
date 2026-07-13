@@ -47,6 +47,8 @@
 | id | uuid | PK |
 | email / phone | string | unique |
 | display_name | string | |
+| avatar_url | text | nullable; public URL to the user's uploaded profile photo in the `avatars` Storage bucket. Null = fall back to the existing initials-in-a-circle display, which stays as the default treatment, not something being replaced. |
+| has_completed_onboarding | boolean | default false; set true on completing or skipping the first-time feature carousel (Section 2, feature spec). Checked once at app launch/first Discover load — never shown again once true, whether they finished it or skipped it. |
 | home_location | geography(point) | for default map center + radius |
 | role_flags | jsonb / enum[] | buyer, seller, organizer (most users: buyer+seller) |
 | is_verified_organizer | boolean | gates event creation |
@@ -54,9 +56,13 @@
 | seller_avg_rating | numeric | denormalized, recalculated on new review; nullable until first review |
 | seller_review_count | int | denormalized count, used alongside avg_rating for display (e.g., "4.8★ · 23 reviews") |
 | buyer_checkin_count | int | default 0; denormalized count of the user's `check_ins` rows, incremented via trigger on insert. Sole basis for the buyer tier — no separate points/bonus system. |
+| terms_accepted_at | timestamp | set at Sign Up when the required agreement checkbox is checked; nullable only for accounts created before this field existed |
+| terms_version | text | e.g., "2026-07-11" — a simple date-string identifier for which version of the Terms was live at acceptance time, so there's a real record if the document is later updated. Doesn't need a full versioning system — just enough to answer "what did they actually agree to." |
 | created_at | timestamp | |
 
 **Buyer tier is derived, not stored** — same philosophy as the Hot Listing threshold and sale status: `buyer_checkin_count` maps to a tier at display time via named threshold constants, not a column that needs separate updating. **Launch values:** no badge below 10 check-ins; Regular (10+), Trusted Shopper (100+), Super Shopper (250+) — starting points, not fixed forever; easy to retune post-launch once there's real usage data to look at, same as the Hot Listing threshold.
+
+**Avatar storage:** a separate `avatars` Storage bucket (public read, authenticated users can only upload/update/delete their own file — path scoped by their own user ID) — same policy pattern as the existing listing-photos bucket, just a distinct bucket rather than mixing user avatars into listing content.
 
 ### `sale_listings`
 | Field | Type | Notes |
@@ -74,10 +80,12 @@
 | status | enum | `draft`, `published`, `cancelled` — only real, explicitly-set states a seller controls. **"Scheduled" / "Live" / "Ended" are not separately stored** — they're derived at display/query time from `start_date`/`end_date` vs. the current date, for any listing with `status = published`. This avoids needing a cron job or scheduled server-side task just to flip a status column on a timer, which isn't worth the added infrastructure at this stage. A practical side benefit: a seller extending `end_date` on an already-"ended" (by date) listing naturally makes it "live" or "scheduled" again automatically, with no special-case logic needed. |
 | title | text | nullable; seller-editable headline. If null, display falls back to the existing auto-derived address-based title (e.g., "Maple Street garage sale") — this is additive, not a change to current default behavior. |
 | description | text | nullable |
+| moderation_status | enum | `clean`, `pending_review`, `rejected` — default `clean`. Set by the Anthropic-based text moderation check at submit time, or forced to `pending_review` regardless of screening result if this is the seller's first-ever listing (account-level trust signal, Section 9 feature spec). A `pending_review` listing still publishes immediately (not blocked, given listings are time-sensitive) — pulled down only if manual review in the Supabase dashboard finds a real problem. |
 | other_items | text[] | nullable; free-tag entries from the "Other" category input (e.g., "guitar," "vinyl records") — stored as a list, not appended into `description`, so each tag is a discrete match target for the same keyword-matching pipeline used against buyers' `saved_searches.keywords` |
 | event_id | uuid | FK → town_wide_events, nullable |
 | view_count / favorite_count | int | denormalized counters, updated async |
 | checkin_count | int | default 0; denormalized count of `check_ins` rows for this specific listing, incremented via trigger on insert. Distinct from `users.buyer_checkin_count` (a buyer's total across all sales) — this is a seller-facing tally of foot traffic for one specific sale. |
+| highest_tier_notified | enum | `none`, `hot`, `blazing`, `inferno` — default `none`. Tracks the highest Hot Listing tier the seller has already been push-notified about, so a favorite count fluctuating around a threshold (someone unfavorites, someone else favorites again) doesn't re-fire the same "just went Hot!" notification repeatedly. A push only fires when the newly-crossed tier is strictly higher than this stored value, and this value only ever increases, never resets downward even if favorite_count later drops. |
 | created_at / updated_at | timestamp | |
 
 **Editing after publish:** sellers can update a listing in `scheduled` or `live` status — photos, categories, description, and `end_date` (extend or shorten the range) are all editable post-publish, since two-day sales commonly need updates between days (e.g., marking items sold, adding new ones). **`exact_location`, `fuzzed_location`, and `address_text` are locked from direct editing once published** — an address correction must go through the same review path as a new listing rather than a silent in-place edit, since silently changing a live listing's location is a safety/trust risk.
@@ -96,6 +104,23 @@ Join table: `listing_id`, `category_id` — many-to-many.
 | storage_key | string | object storage path |
 | sort_order | int | |
 | moderation_status | enum | pending, approved, rejected |
+
+### `organizer_applications`
+*Retroactively documented — built directly during the organizer/events implementation without a docs update at the time.*
+
+| Field | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| user_id | uuid | FK → users |
+| full_name | text | |
+| neighborhood | text | the area they want to organize for |
+| affiliation_notes | text | formal affiliation (resident association, BIA) or informal vouching (neighbor names, community group link) |
+| status | enum | `pending`, `approved`, `denied` |
+| created_at | timestamp | |
+
+**RLS:** a user can insert/select their own application; no client-side path to change `status` — approval happens only via direct edits in the Supabase dashboard, the intended manual-review workflow (Section 7, feature spec).
+
+**Admin email notification (via Resend):** on insert, an email fires to the team's review address, since nothing else would surface a new pending application for review. This is a real dependency addition beyond what was originally planned — worth remembering if the notification target email or Resend account ever needs updating, since it's not something visible anywhere in the app's own UI.
 
 ### `town_wide_events`
 | Field | Type | Notes |
@@ -209,14 +234,17 @@ This is a query-time concern, not just a storage concern — the API must never 
 - Category matching is exact-set overlap for MVP (Phase 1). Keyword matching against free-text `description` is a Phase 2 addition — needs at least basic text search (Postgres full-text search or a lightweight embedding-based match) rather than naive substring matching, to catch synonyms.
 
 ### Moderation pipeline
-- Photo upload → async job calls image moderation API → sets `moderation_status`; listing can't move from draft to scheduled/live until all photos are approved (or listing has zero photos).
-- Description text → synchronous lightweight profanity/spam check at submit time (fast enough to block submission if it fails); async deeper scam-pattern check can flag for manual review without blocking publish.
-- New accounts: first listing published flagged for manual review queue but not blocked — published immediately, pulled down only if review fails, to avoid delaying a time-sensitive listing.
+- **Reuses the existing Anthropic API integration** (already wired via Supabase Edge Function for AI-assisted listing descriptions) rather than adding a separate image/text moderation vendor — one already-paid-for, already-integrated service handles both.
+- **Photo upload:** each photo sent to the Anthropic API (vision) for classification at upload time. Clearly inappropriate content is rejected immediately with a clear error; borderline/uncertain results set `listing_photos.moderation_status = 'pending_review'` rather than auto-rejecting — a listing can't move from draft to scheduled/live until every photo is either approved or has zero photos.
+- **Description text:** sent to the Anthropic API with a moderation-classification prompt (a distinct prompt from the AI-suggestion feature, same underlying integration) — synchronous, at submit time, fast enough to block clearly bad content (hate speech, obvious scam scripts) before publish. Borderline content is allowed through but flagged (`sale_listings.moderation_status = 'pending_review'`) rather than blocked — avoid false-positive-blocking a legitimate seller.
+- **Review queue: deliberately no custom admin UI.** Same pragmatic choice already made for organizer applications — flagged content and open reports are reviewed directly in the Supabase dashboard's Table Editor (filtered by `moderation_status = 'pending_review'` or `reports.status = 'open'`), not a dedicated in-app screen. Revisit only if review volume genuinely outgrows a filtered table view.
+- **New accounts:** a user's first-ever listing is always flagged `pending_review` regardless of what automated screening returns — publishes immediately (not blocked, given listings are time-sensitive) but pulled down if manual review fails. Established accounts with a clean history skip this extra layer after their first listing.
 
 ### Monetization
 - **Ads:** Google AdMob, integrated at natural break points in the Discover feed only — never interstitial popups, never in core flows like Route Planner, List a Sale, or Edit Listing. Hidden entirely when the signed-in user has an active ad-free entitlement (checked via the RevenueCat SDK client-side, cached locally).
 - **Billing:** all real purchases (ad-free subscription, listing boosts) go through **RevenueCat**, which sits on top of native App Store/Play Store billing (required by platform policy for digital goods — no way to route around this with a third-party payment processor). RevenueCat handles cross-platform receipt validation so the app doesn't implement StoreKit and Play Billing separately.
 - **Server-side sync:** RevenueCat webhooks call a Supabase Edge Function on purchase/renewal/expiration/cancellation events, updating `users.is_ad_free`/`ad_free_expires_at` (subscription) or `sale_listings.is_boosted`/`boost_expires_at` (one-time boost, tied to a specific listing via purchase metadata). This is necessary because ranking decisions (boost priority in Discover) and the ad-hide decision on any device need to be queryable from the backend, not just checked client-side on the purchasing device.
+- **Admin email (Resend):** a separate, small dependency added directly during implementation, not originally planned — used specifically for the organizer application admin-notification email (see `organizer_applications` table). Not used for any user-facing transactional email at this point (password resets, etc. are handled through Supabase Auth's own built-in email, a separate system).
 - **Boost ranking constraint:** `is_boosted`/`boost_expires_at` affects **Discover's default browse sort order only**. The "I'm Looking For" matching query (Section 3, Matching & notifications) must never reference these fields — relevance-based ranking there stays untouched by paid placement, by design.
 
 ---
@@ -308,6 +336,8 @@ The Edge Function:
 **Respecting notification preferences:** `users.notification_prefs` (already in the data model from early planning, previously unused) now actually gates whether a user's tokens receive sends — the Settings toggle built early in this project needs to actually read/write this field for real, rather than being a local-only placeholder.
 
 **Scope of this build:** Matches only, for now — the highest-value, most clearly-specified push trigger. Review prompts and cluster-suggestion nudges keep their existing pull-based (check-on-app-open) behavior; extending push to those is a reasonable low-effort follow-up once this core token/send infrastructure exists, not required as part of this pass.
+
+**Second trigger added later: Hot Listing tier notifications.** Same `pg_net` trigger → Edge Function → Expo push API pattern as Matches, reusing the same infrastructure rather than building a parallel system. A trigger on `sale_listings` fires when `favorite_count` updates; the function computes the listing's tier from the same named threshold constants used for the visual badge (Hot 11+, Blazing 26+, Inferno 51+), compares against `highest_tier_notified`, and only sends + updates that column if the newly-computed tier is strictly higher. Notification goes to the listing's `seller_id`, respecting `notification_prefs` the same as Matches. Message copy: "🔥 Your listing just went Hot!" (or Blazing/Inferno equivalent), deep-linking to the listing's Sale Detail or My Listings.
 
 ---
 

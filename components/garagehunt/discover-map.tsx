@@ -9,6 +9,7 @@ import { MockSale, SaleCard } from '@/components/garagehunt/sale-card';
 import { Colors, Fonts } from '@/constants/brand';
 import { DEFAULT_MAP_REGION } from '@/constants/map';
 import { useCurrentLocation } from '@/hooks/use-current-location';
+import { useSpotlightTarget } from '@/hooks/use-spotlight-target';
 
 const PIN_COLORS = [Colors.coral, Colors.violet, Colors.jade] as const;
 
@@ -44,6 +45,8 @@ export function DiscoverMap({
   const { coords } = useCurrentLocation();
   const insets = useSafeAreaInsets();
   const [selectedCluster, setSelectedCluster] = useState<MockSale[] | null>(null);
+  const mapSpotlight = useSpotlightTarget('map');
+  const planRouteSpotlight = useSpotlightTarget('plan-route-button');
 
   const initialRegion: Region = coords
     ? { latitude: coords.latitude, longitude: coords.longitude, latitudeDelta: 0.08, longitudeDelta: 0.08 }
@@ -52,7 +55,7 @@ export function DiscoverMap({
   const groups = useMemo(() => groupSalesByLocation(sales), [sales]);
 
   return (
-    <View style={styles.card}>
+    <View ref={mapSpotlight.ref} onLayout={mapSpotlight.onLayout} style={styles.card}>
       <MapView style={styles.map} initialRegion={initialRegion} showsUserLocation={coords !== null}>
         {groups.map((group, index) => {
           const [first] = group;
@@ -80,7 +83,11 @@ export function DiscoverMap({
           );
         })}
       </MapView>
-      <Pressable style={styles.fab} onPress={onPlanRoute}>
+      <Pressable
+        ref={planRouteSpotlight.ref}
+        onLayout={planRouteSpotlight.onLayout}
+        style={styles.fab}
+        onPress={onPlanRoute}>
         <Ionicons name="navigate" size={12} color="#fff" />
         <Text style={styles.fabLabel}>Plan route</Text>
       </Pressable>

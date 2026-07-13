@@ -50,6 +50,17 @@ export async function registerForPushNotificationsAsync(userId: string): Promise
       name: 'Match alerts',
       importance: Notifications.AndroidImportance.HIGH,
     });
+    // A separate channel from "match-alerts" — same "channel importance is
+    // locked forever once created" reasoning above means reusing the Match
+    // alerts channel for a semantically different notification type (a
+    // seller-facing Hot Listing milestone, not a buyer-facing match) would
+    // mislabel it in the user's system settings permanently.
+    // send-hot-tier-notification's Edge Function sets channelId to match
+    // this exactly.
+    await Notifications.setNotificationChannelAsync('hot-tier-alerts', {
+      name: 'Hot Listing alerts',
+      importance: Notifications.AndroidImportance.HIGH,
+    });
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();

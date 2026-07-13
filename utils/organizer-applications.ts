@@ -78,8 +78,11 @@ export async function fetchIsVerifiedOrganizer(userId: string): Promise<boolean>
     .from('users')
     .select('is_verified_organizer')
     .eq('id', userId)
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return data.is_verified_organizer;
+  // No row (a signed-in auth.users account without a public.users row yet)
+  // defaults to not-verified — .single() would instead throw PGRST116 on
+  // this exact case, same failure mode fixed in utils/ad-free.ts.
+  return data?.is_verified_organizer ?? false;
 }

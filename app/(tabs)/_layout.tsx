@@ -1,12 +1,48 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { Colors, Fonts } from '@/constants/brand';
+import { SpotlightRegistryProvider } from '@/contexts/spotlight-registry';
+import { useSpotlightTarget } from '@/hooks/use-spotlight-target';
 
-export default function TabLayout() {
+// Wraps each tab icon in a fixed-size, spotlight-measurable box — a real
+// component (not an inline function passed straight to tabBarIcon) because
+// useSpotlightTarget is a hook, and tabBarIcon's render callback isn't
+// guaranteed to be called in the stable, consistent order React's rules of
+// hooks require.
+function SpotlightTabIcon({
+  spotlightId,
+  name,
+  size,
+  color,
+}: {
+  spotlightId: string;
+  name: React.ComponentProps<typeof Ionicons>['name'];
+  size: number;
+  color: string;
+}) {
+  const { ref, onLayout } = useSpotlightTarget(spotlightId);
+  return (
+    <View ref={ref} onLayout={onLayout} style={tabIconStyles.wrap}>
+      <Ionicons name={name} size={size - 4} color={color} />
+    </View>
+  );
+}
+
+const tabIconStyles = StyleSheet.create({
+  wrap: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
+function TabLayoutContent() {
   // Overriding tabBarStyle.height (below) opts out of React Navigation's own
   // safe-area-aware sizing, so it has to be added back manually here.
   // Without it, the bar renders with just a small fixed paddingBottom (10),
@@ -43,30 +79,46 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Discover',
-          tabBarIcon: ({ color, size }) => <Ionicons name="map" size={size - 4} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <SpotlightTabIcon spotlightId="tab-discover" name="map" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="looking-for"
         options={{
           title: 'Looking for',
-          tabBarIcon: ({ color, size }) => <Ionicons name="locate" size={size - 4} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <SpotlightTabIcon spotlightId="tab-looking-for" name="locate" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="list-sale"
         options={{
           title: 'List sale',
-          tabBarIcon: ({ color, size }) => <Ionicons name="add-circle" size={size - 4} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <SpotlightTabIcon spotlightId="tab-list-sale" name="add-circle" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size - 4} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <SpotlightTabIcon spotlightId="tab-profile" name="person" size={size} color={color} />
+          ),
         }}
       />
     </Tabs>
+  );
+}
+
+export default function TabLayout() {
+  return (
+    <SpotlightRegistryProvider>
+      <TabLayoutContent />
+    </SpotlightRegistryProvider>
   );
 }

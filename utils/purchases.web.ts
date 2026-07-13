@@ -2,6 +2,8 @@
 // comment. There's no StoreKit/Play Billing in a browser, so every export
 // here is a safe no-op / always-unavailable stub with the same signatures.
 export const AD_FREE_ENTITLEMENT_ID = 'ad_free';
+export const AD_FREE_PRODUCT_ID = 'com.garagehunt.app.adfree.monthly';
+export const BOOST_PRODUCT_ID = 'com.garagehunt.app.boost';
 
 export function isPurchasesAvailable(): boolean {
   return false;
@@ -13,6 +15,10 @@ export function signOutPurchasesUser(): void {}
 
 export async function purchaseAdFree(): Promise<void> {
   throw new Error('Removing ads is not available on this platform yet.');
+}
+
+export async function purchaseBoost(): Promise<void> {
+  throw new Error('Boosting a listing is not available on this platform yet.');
 }
 
 export async function restorePurchases(): Promise<void> {}

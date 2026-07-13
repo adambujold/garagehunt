@@ -4,6 +4,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PriceTag } from '@/components/garagehunt/price-tag';
 import { Colors, Fonts, PriceTagVariant } from '@/constants/brand';
+import { useSpotlightTarget } from '@/hooks/use-spotlight-target';
 import { formatSaleSchedule } from '@/utils/format-sale-schedule';
 import { deriveHotTier, HOT_TIER_LABELS } from '@/utils/hot-tier';
 
@@ -56,13 +57,32 @@ export type MockSale = {
   // a misleading "0★".
   sellerRating: number | null;
   sellerReviewCount: number;
+  // Derived from sale_listings.is_boosted/boost_expires_at (see
+  // utils/listing-boost.ts's deriveIsBoosted) — already accounts for
+  // expiry, so this is safe to treat as "currently boosted" as-is, no
+  // further date checking needed by consumers.
+  isBoosted: boolean;
 };
 
 // isNew is only ever set by the Matches for You screen (a listing that
 // matched a saved search within the last day) — every other caller omits
-// it, so the badge/border stay invisible everywhere else.
-export function SaleCard({ sale, isNew = false }: { sale: MockSale; isNew?: boolean }) {
+// it, so the badge/border stay invisible everywhere else. spotlightId is
+// only ever passed for Discover's first feed card (see index.tsx) — the
+// onboarding tour's "favorite this one" stop needs exactly one real target.
+export function SaleCard({
+  sale,
+  isNew = false,
+  spotlightId,
+}: {
+  sale: MockSale;
+  isNew?: boolean;
+  spotlightId?: string;
+}) {
   const hotTier = deriveHotTier(sale.favoriteCount);
+  // Every disabled instance needs its own unique fallback id — see the
+  // matching comment in event-card.tsx for why a shared constant would
+  // unregister the one real card's already-registered target.
+  const heartSpotlight = useSpotlightTarget(spotlightId ?? `sale-card-heart-inactive-${sale.id}`, spotlightId !== undefined);
 
   return (
     <Pressable
@@ -97,17 +117,18 @@ export function SaleCard({ sale, isNew = false }: { sale: MockSale; isNew?: bool
         </Text>
         <View style={styles.footerRow}>
           <PriceTag label={sale.tagLabel} variant={sale.tagVariant} rotate={-2} />
+          {sale.isBoosted && <PriceTag label="⭐ Featured" variant="boosted" rotate={-2} />}
           {sale.eventId !== null && <PriceTag label="Community sale" variant="town" rotate={-2} />}
-          <Text style={styles.categories} numberOfLines={2}>
-            {sale.categories.join(' · ')}
-          </Text>
         </View>
+        <Text style={styles.categories} numberOfLines={2}>
+          {sale.categories.join(' · ')}
+        </Text>
         {sale.sellerReviewCount > 0 && (
           <Text style={styles.ratingText}>
             {sale.sellerRating?.toFixed(1)}★ · {sale.sellerReviewCount} review{sale.sellerReviewCount === 1 ? '' : 's'}
           </Text>
         )}
-        <View style={styles.interestRow}>
+        <View ref={heartSpotlight.ref} onLayout={heartSpotlight.onLayout} style={styles.interestRow}>
           <Ionicons name={hotTier ? 'heart' : 'heart-outline'} size={12} color={Colors.interestPink} />
           <Text style={styles.interestText}>
             {sale.favoriteCount} {sale.favoriteCount === 1 ? 'person' : 'people'} interested
@@ -183,11 +204,10 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   categories: {
-    flex: 1,
-    flexShrink: 1,
     fontFamily: Fonts.body,
     fontSize: 10,
     color: Colors.muted,
+    marginTop: 4,
   },
   ratingText: {
     fontFamily: Fonts.bodyMedium,

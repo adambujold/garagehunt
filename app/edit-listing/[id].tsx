@@ -22,7 +22,7 @@ import { AiSuggestionModal } from '@/components/garagehunt/ai-suggestion-modal';
 import { Chip } from '@/components/garagehunt/chip';
 import { OtherCategoryField } from '@/components/garagehunt/other-category-field';
 import { PhotoSourceSheet } from '@/components/garagehunt/photo-source-sheet';
-import { Colors, Fonts } from '@/constants/brand';
+import { Colors, Fonts, PriceTagVariantColors } from '@/constants/brand';
 import { CATEGORIES } from '@/constants/categories';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { getErrorMessage } from '@/utils/get-error-message';
@@ -760,7 +760,7 @@ const styles = StyleSheet.create({
   cancelLinkLabel: {
     fontFamily: Fonts.bodySemiBold,
     fontSize: 12,
-    color: '#C9857A',
+    color: Colors.danger,
   },
   confirmRow: {
     marginTop: 12,
@@ -800,7 +800,9 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#A8493E',
+    // Same red as a Cancelled listing's own badge (PriceTagVariantColors.cancelled)
+    // — this button is confirming that exact state, not a standalone color choice.
+    backgroundColor: PriceTagVariantColors.cancelled,
     borderRadius: 10,
     paddingVertical: 10,
   },

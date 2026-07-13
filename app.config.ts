@@ -8,11 +8,11 @@ import { ExpoConfig } from 'expo/config';
 // carryover of the previous app.json.
 
 const config: ExpoConfig = {
-  name: 'garagehunt',
+  name: 'GarageHunt',
   slug: 'garagehunt',
   version: '1.0.0',
   orientation: 'portrait',
-  icon: './assets/images/icon.png',
+  icon: './assets/images/garagehunt-icon-ios-1024.png',
   scheme: 'garagehunt',
   userInterfaceStyle: 'automatic',
   newArchEnabled: true,
@@ -28,13 +28,21 @@ const config: ExpoConfig = {
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
     },
+    // EAS Build reads this and enables the Sign In with Apple capability on
+    // the App ID automatically at build time — no manual step in the Apple
+    // Developer portal needed.
+    usesAppleSignIn: true,
   },
   android: {
     adaptiveIcon: {
-      backgroundColor: '#E6F4FE',
-      foregroundImage: './assets/images/android-icon-foreground.png',
-      backgroundImage: './assets/images/android-icon-background.png',
-      monochromeImage: './assets/images/android-icon-monochrome.png',
+      // backgroundColor is only a fallback for when backgroundImage is
+      // absent — kept matching Colors.ink (constants/brand.ts) rather than
+      // left as a stale mismatched color, in case backgroundImage is ever
+      // removed.
+      backgroundColor: '#2B1B4D',
+      foregroundImage: './assets/images/garagehunt-icon-android-foreground-1024.png',
+      backgroundImage: './assets/images/garagehunt-icon-android-background-1024.png',
+      monochromeImage: './assets/images/garagehunt-icon-android-monochrome-1024.png',
     },
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,

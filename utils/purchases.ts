@@ -1,29 +1,37 @@
 import { Platform } from 'react-native';
-import Purchases, { CustomerInfo } from 'react-native-purchases';
+import Purchases, { CustomerInfo, PurchasesPackage } from 'react-native-purchases';
 
 // GarageHunt — ad-free subscription purchase flow (technical architecture
 // doc Section 4, Monetization Data Model). RevenueCat sits on top of native
-// App Store billing; supabase/functions/revenuecat-webhook is the
+// App Store/Play Store billing; supabase/functions/revenuecat-webhook is the
 // server-side half that actually persists the entitlement to
 // users.is_ad_free/ad_free_expires_at once a purchase completes.
 //
-// iOS only for now — Android is blocked on Google's pending bank
-// verification, so there's no EXPO_PUBLIC_REVENUECAT_ANDROID_KEY yet.
-// getApiKeyForPlatform() returning null on Android is what makes every
-// export below a safe no-op there: no crash, no purchase option shown,
-// same "gracefully absent" treatment discover-ad-card.tsx already gives a
-// missing AdMob unit id.
+// iOS and Android both live now — Google Play products can be created and
+// service account linking is in progress, so EXPO_PUBLIC_REVENUECAT_ANDROID_KEY
+// is a real (if not-yet-populated) env var. getApiKeyForPlatform() returning
+// null is what makes every export below a safe no-op on a platform without a
+// configured key: no crash, no purchase option shown, same "gracefully
+// absent" treatment discover-ad-card.tsx already gives a missing AdMob unit
+// id — this is what keeps Android purchases harmlessly disabled again if the
+// Android key is ever unset (e.g. a fresh .env checkout before it's filled
+// in), no separate flag needed.
 //
 // react-native-purchases has no web target at all — see purchases.web.ts
 // for the stub, following the same per-platform-file pattern already
 // established for react-native-google-mobile-ads and expo-notifications.
 
 export const AD_FREE_ENTITLEMENT_ID = 'ad_free';
+export const AD_FREE_PRODUCT_ID = 'com.garagehunt.app.adfree.monthly';
+export const BOOST_PRODUCT_ID = 'com.garagehunt.app.boost';
 
 function getApiKeyForPlatform(): string | null {
-  if (Platform.OS === 'ios') return process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY ?? null;
-  // Platform.OS === 'android' falls through to null deliberately — see this
-  // file's header comment.
+  // `|| null`, not `?? null` — an unset env var and an env var explicitly
+  // set to an empty string both need to fall through to null here (the
+  // Android key starts out present-but-empty in .env until RevenueCat's
+  // Android app actually exists to generate a real one from).
+  if (Platform.OS === 'ios') return process.env.EXPO_PUBLIC_REVENUECAT_IOS_KEY || null;
+  if (Platform.OS === 'android') return process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY || null;
   return null;
 }
 
@@ -67,18 +75,42 @@ export function signOutPurchasesUser(): void {
   Purchases.logOut().catch((err) => console.error('Failed to sign out RevenueCat user', err));
 }
 
+// Matched by the underlying store product id, not array position — with
+// two distinct one-time-purchasable products now living in the same
+// "default" offering (ad-free monthly, listing boost), grabbing
+// availablePackages[0] would silently purchase whichever one happened to
+// be listed first. This is deliberately explicit instead.
+async function findPackageByProductId(productId: string): Promise<PurchasesPackage> {
+  const offerings = await Purchases.getOfferings();
+  const match = offerings.current?.availablePackages.find((pkg) => pkg.product.identifier === productId);
+  if (!match) {
+    throw new Error('That purchase is not available right now. Please try again later.');
+  }
+  return match;
+}
+
 export async function purchaseAdFree(): Promise<void> {
   if (!isPurchasesAvailable()) {
     throw new Error('Removing ads is not available on this platform yet.');
   }
 
-  const offerings = await Purchases.getOfferings();
-  const adFreePackage = offerings.current?.availablePackages[0];
-  if (!adFreePackage) {
-    throw new Error('The ad-free subscription is not available right now. Please try again later.');
+  const adFreePackage = await findPackageByProductId(AD_FREE_PRODUCT_ID);
+  await Purchases.purchasePackage(adFreePackage);
+}
+
+// Boost is a one-time consumable purchase tied to a specific listing, not
+// an account-wide entitlement — see supabase/migrations/0022_listing_boost.sql
+// for why this doesn't use a RevenueCat entitlement at all. This only
+// drives the actual App Store/StoreKit transaction; applying the boost to
+// a specific listing happens immediately after in
+// utils/sale-listings.ts's applyListingBoost, by the caller.
+export async function purchaseBoost(): Promise<void> {
+  if (!isPurchasesAvailable()) {
+    throw new Error('Boosting a listing is not available on this platform yet.');
   }
 
-  await Purchases.purchasePackage(adFreePackage);
+  const boostPackage = await findPackageByProductId(BOOST_PRODUCT_ID);
+  await Purchases.purchasePackage(boostPackage);
 }
 
 export async function restorePurchases(): Promise<void> {

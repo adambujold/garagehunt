@@ -5,8 +5,10 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { UserAvatar } from '@/components/garagehunt/user-avatar';
 import { Colors, Fonts } from '@/constants/brand';
 import { useAuthSession } from '@/hooks/use-auth-session';
+import { fetchAvatarUrls } from '@/utils/avatars';
 import {
   CheckedInBuyer,
   fetchCheckedInBuyers,
@@ -26,6 +28,7 @@ export default function ListingBuyersScreen() {
   const [reviews, setReviews] = useState<ListingReview[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [thumbsUpPendingId, setThumbsUpPendingId] = useState<string | null>(null);
+  const [avatarUrls, setAvatarUrls] = useState<Map<string, string | null>>(new Map());
 
   useFocusEffect(
     useCallback(() => {
@@ -46,6 +49,13 @@ export default function ListingBuyersScreen() {
           if (cancelled) return;
           setBuyers(buyerRows);
           setReviews(reviewRows);
+          // Photo only, never a name — buyers stay identified as "Buyer
+          // #XXXX" here by design (see fetchCheckedInBuyers' comment); a
+          // real avatar photo is a visual upgrade to that anonymized row,
+          // not a way to reveal who they are.
+          return fetchAvatarUrls(buyerRows.map((buyer) => buyer.buyerId)).then((map) => {
+            if (!cancelled) setAvatarUrls(map);
+          });
         })
         .catch((err) => {
           if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Failed to load buyers.');
@@ -119,9 +129,7 @@ export default function ListingBuyersScreen() {
           ListHeaderComponent={<Text style={styles.sectionTitle}>Checked in</Text>}
           renderItem={({ item }) => (
             <View style={styles.buyerRow}>
-              <View style={styles.buyerAvatar}>
-                <Ionicons name="person" size={14} color={Colors.amberIcon} />
-              </View>
+              <UserAvatar avatarUrl={avatarUrls.get(item.buyerId) ?? null} size={30} />
               <Text style={styles.buyerLabel}>Buyer #{item.buyerId.slice(0, 4).toUpperCase()}</Text>
               <Pressable
                 style={[styles.thumbsUpButton, item.thumbsUpGiven && styles.thumbsUpButtonGiven]}
@@ -245,14 +253,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     marginBottom: 8,
-  },
-  buyerAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: Colors.amberBg,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   buyerLabel: {
     flex: 1,

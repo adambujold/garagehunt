@@ -16,22 +16,27 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Colors, Fonts } from '@/constants/brand';
+import { signInWithApple } from '@/utils/apple-auth';
 import { getErrorMessage } from '@/utils/get-error-message';
 import { signInWithGoogle } from '@/utils/google-auth';
 import { supabase } from '@/utils/supabase';
 
-// Real Supabase email/password and Google auth. A successful sign-in updates
-// the shared session (see hooks/use-auth-session.ts), which the root layout
-// listens to and swaps into the tab bar automatically — no callback needed
-// here either way. Apple is still a visual placeholder — Sign in with Apple
-// needs an Apple Developer Program account, which isn't set up yet; wire it
-// up alongside push notifications later, since both need one.
+// Real Supabase email/password, Google, and Apple auth. A successful sign-in
+// updates the shared session (see hooks/use-auth-session.ts), which the root
+// layout listens to and swaps into the tab bar automatically — no callback
+// needed here either way. Apple is iOS-only (see the Platform.OS gate below)
+// — Apple's requirement to offer Sign in with Apple doesn't apply on
+// Android, and expo-apple-authentication's native module has no Android
+// equivalent.
 export function LoginScreen({ onNavigateToSignUp }: { onNavigateToSignUp: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const anyLoading = loading || googleLoading || appleLoading;
 
   const handleSignIn = async () => {
     setError(null);
@@ -55,6 +60,18 @@ export function LoginScreen({ onNavigateToSignUp }: { onNavigateToSignUp: () => 
     }
   };
 
+  const handleAppleSignIn = async () => {
+    setError(null);
+    setAppleLoading(true);
+    try {
+      await signInWithApple();
+    } catch (err) {
+      setError(getErrorMessage(err, 'Something went wrong signing in with Apple.'));
+    } finally {
+      setAppleLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <KeyboardAvoidingView style={styles.flexFill} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -68,14 +85,20 @@ export function LoginScreen({ onNavigateToSignUp }: { onNavigateToSignUp: () => 
           <Text style={styles.subtitle}>Sign in to find this weekend&apos;s best sales</Text>
         </View>
 
-        {/* Non-functional until Sign in with Apple is wired up — see the
-            header comment. */}
-        <Pressable style={styles.appleButton}>
-          <Ionicons name="logo-apple" size={16} color="#fff" />
-          <Text style={styles.appleButtonLabel}>Continue with Apple</Text>
-        </Pressable>
+        {Platform.OS === 'ios' && (
+          <Pressable style={styles.appleButton} onPress={handleAppleSignIn} disabled={anyLoading}>
+            {appleLoading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="logo-apple" size={16} color="#fff" />
+                <Text style={styles.appleButtonLabel}>Continue with Apple</Text>
+              </>
+            )}
+          </Pressable>
+        )}
 
-        <Pressable style={styles.googleButton} onPress={handleGoogleSignIn} disabled={googleLoading || loading}>
+        <Pressable style={styles.googleButton} onPress={handleGoogleSignIn} disabled={anyLoading}>
           {googleLoading ? (
             <ActivityIndicator color={Colors.coral} />
           ) : (
@@ -134,12 +157,12 @@ export function LoginScreen({ onNavigateToSignUp }: { onNavigateToSignUp: () => 
 
         {error && (
           <View style={styles.errorBanner}>
-            <Ionicons name="warning-outline" size={13} color="#B3261E" />
+            <Ionicons name="warning-outline" size={13} color={Colors.errorText} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
 
-        <Pressable style={styles.signInButton} onPress={handleSignIn} disabled={loading || googleLoading}>
+        <Pressable style={styles.signInButton} onPress={handleSignIn} disabled={anyLoading}>
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
@@ -282,7 +305,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FDECEA',
+    backgroundColor: Colors.errorBg,
     borderRadius: 10,
     padding: 10,
     marginBottom: 14,
@@ -291,7 +314,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: Fonts.body,
     fontSize: 11,
-    color: '#B3261E',
+    color: Colors.errorText,
   },
   signInButton: {
     alignItems: 'center',
