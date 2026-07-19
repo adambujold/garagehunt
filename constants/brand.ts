@@ -73,7 +73,8 @@ export type PriceTagVariant =
   | 'blazingHot'
   | 'infernoHot'
   | 'organizer'
-  | 'boosted';
+  | 'boosted'
+  | 'etransfer';
 
 export const PriceTagVariantColors: Record<PriceTagVariant, string> = {
   live: Colors.jade,
@@ -95,6 +96,10 @@ export const PriceTagVariantColors: Record<PriceTagVariant, string> = {
   // Same gold used for star ratings elsewhere — reads as "premium/starred"
   // at a glance, distinct from the hot tiers' red-orange escalation.
   boosted: Colors.marigold,
+  // Jade reads as "money-friendly" at a glance — shared with "live" is fine
+  // here since the label text itself ("💸 Cash + e-Transfer" vs "Live now")
+  // is what actually disambiguates them, not the accent color alone.
+  etransfer: Colors.jade,
 };
 
 // Three-tier "Hot listing" progression (feature spec Section 4d: "once a

@@ -20,8 +20,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AiSuggestionModal } from '@/components/garagehunt/ai-suggestion-modal';
 import { Chip } from '@/components/garagehunt/chip';
+import { DatePickerField } from '@/components/garagehunt/date-picker-field';
 import { OtherCategoryField } from '@/components/garagehunt/other-category-field';
+import { PaymentMethodToggle } from '@/components/garagehunt/payment-method-toggle';
 import { PhotoSourceSheet } from '@/components/garagehunt/photo-source-sheet';
+import { PaymentMethod } from '@/components/garagehunt/sale-card';
 import { Colors, Fonts, PriceTagVariantColors } from '@/constants/brand';
 import { CATEGORIES } from '@/constants/categories';
 import { useAuthSession } from '@/hooks/use-auth-session';
@@ -34,7 +37,6 @@ import {
   uploadListingPhoto,
 } from '@/utils/listing-photos';
 import { goBack } from '@/utils/navigation';
-import { formatDisplayDate, parseDisplayDate } from '@/utils/parse-sale-form-input';
 import { pickListingPhoto, takeListingPhoto } from '@/utils/pick-listing-photo';
 import {
   cancelSaleListing,
@@ -59,6 +61,7 @@ export default function EditListingScreen() {
   const [endDate, setEndDate] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
   const [title, setTitle] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash_only');
   const [description, setDescription] = useState('');
   const [otherItems, setOtherItems] = useState<string[]>([]);
   const [aiModalVisible, setAiModalVisible] = useState(false);
@@ -94,10 +97,11 @@ export default function EditListingScreen() {
           if (cancelledEffect) return;
           setListing(result);
           if (result) {
-            setStartDate(formatDisplayDate(result.startDate));
-            setEndDate(formatDisplayDate(result.endDate));
+            setStartDate(result.startDate);
+            setEndDate(result.endDate);
             setCategories(result.categoryNames);
             setTitle(result.title ?? '');
+            setPaymentMethod(result.paymentMethod);
             setDescription(result.description);
             setOtherItems(result.otherItems);
             fetchListingPhotos(result.id)
@@ -205,13 +209,12 @@ export default function EditListingScreen() {
     setSaveError(null);
     setSaving(true);
     try {
-      const startDateIso = parseDisplayDate(startDate);
-      const endDateIso = parseDisplayDate(endDate);
       await updateSaleListing({
         id: listing.id,
-        startDate: startDateIso,
-        endDate: endDateIso,
+        startDate,
+        endDate,
         title,
+        paymentMethod,
         description,
         otherItems,
         categoryNames: categories,
@@ -365,14 +368,20 @@ export default function EditListingScreen() {
 
             <Text style={styles.fieldLabel}>Sale dates</Text>
             <View style={styles.fieldRow}>
-              <View style={[styles.field, styles.fieldRowItem]}>
-                <Ionicons name="calendar-outline" size={14} color={Colors.muted} />
-                <TextInput value={startDate} onChangeText={setStartDate} style={styles.fieldInput} />
-              </View>
-              <View style={[styles.field, styles.fieldRowItem]}>
-                <Ionicons name="calendar-outline" size={14} color={Colors.muted} />
-                <TextInput value={endDate} onChangeText={setEndDate} style={styles.fieldInput} />
-              </View>
+              <DatePickerField
+                value={startDate}
+                onChange={(iso) => {
+                  setStartDate(iso);
+                  if (!endDate || endDate < iso) setEndDate(iso);
+                }}
+                style={[styles.field, styles.fieldRowItem]}
+              />
+              <DatePickerField
+                value={endDate}
+                onChange={setEndDate}
+                minimumDateIso={startDate || undefined}
+                style={[styles.field, styles.fieldRowItem]}
+              />
             </View>
             <Text style={styles.fieldHint}>
               Extend or shorten your dates anytime — extending past end date makes it live again.
@@ -423,6 +432,9 @@ export default function EditListingScreen() {
                 style={styles.fieldInput}
               />
             </View>
+
+            <Text style={styles.fieldLabel}>Payment accepted</Text>
+            <PaymentMethodToggle value={paymentMethod} onChange={setPaymentMethod} />
 
             <Text style={styles.fieldLabel}>Description</Text>
             <TextInput

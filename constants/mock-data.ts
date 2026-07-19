@@ -26,6 +26,7 @@ export const MOCK_SALES: MockSale[] = [
     sellerReviewCount: 23,
     checkinCount: 0,
     isBoosted: false,
+    paymentMethod: 'cash_only',
   },
   {
     id: '2',
@@ -52,6 +53,7 @@ export const MOCK_SALES: MockSale[] = [
     sellerReviewCount: 0,
     checkinCount: 0,
     isBoosted: false,
+    paymentMethod: 'cash_only',
   },
   {
     id: '3',
@@ -78,6 +80,7 @@ export const MOCK_SALES: MockSale[] = [
     sellerReviewCount: 0,
     checkinCount: 0,
     isBoosted: false,
+    paymentMethod: 'cash_only',
   },
   {
     id: '4',
@@ -104,6 +107,7 @@ export const MOCK_SALES: MockSale[] = [
     sellerReviewCount: 2,
     checkinCount: 0,
     isBoosted: false,
+    paymentMethod: 'cash_only',
   },
   {
     id: '5',
@@ -130,6 +134,7 @@ export const MOCK_SALES: MockSale[] = [
     sellerReviewCount: 0,
     checkinCount: 0,
     isBoosted: false,
+    paymentMethod: 'cash_only',
   },
   {
     id: '6',
@@ -156,5 +161,6 @@ export const MOCK_SALES: MockSale[] = [
     sellerReviewCount: 5,
     checkinCount: 0,
     isBoosted: false,
+    paymentMethod: 'cash_only',
   },
 ];

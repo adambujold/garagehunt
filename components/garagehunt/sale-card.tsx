@@ -8,6 +8,8 @@ import { useSpotlightTarget } from '@/hooks/use-spotlight-target';
 import { formatSaleSchedule } from '@/utils/format-sale-schedule';
 import { deriveHotTier, HOT_TIER_LABELS } from '@/utils/hot-tier';
 
+export type PaymentMethod = 'cash_only' | 'cash_and_etransfer';
+
 export type MockSale = {
   id: string;
   title: string;
@@ -62,6 +64,10 @@ export type MockSale = {
   // expiry, so this is safe to treat as "currently boosted" as-is, no
   // further date checking needed by consumers.
   isBoosted: boolean;
+  // Mirrors sale_listings.payment_method — cash_only is the common,
+  // unremarkable case (no badge shown for it); cash_and_etransfer gets a
+  // small badge on the card/detail page since it's the noteworthy option.
+  paymentMethod: PaymentMethod;
 };
 
 // isNew is only ever set by the Matches for You screen (a listing that
@@ -119,6 +125,9 @@ export function SaleCard({
           <PriceTag label={sale.tagLabel} variant={sale.tagVariant} rotate={-2} />
           {sale.isBoosted && <PriceTag label="⭐ Featured" variant="boosted" rotate={-2} />}
           {sale.eventId !== null && <PriceTag label="Community sale" variant="town" rotate={-2} />}
+          {sale.paymentMethod === 'cash_and_etransfer' && (
+            <PriceTag label="💸 Cash + e-Transfer" variant="etransfer" rotate={-2} />
+          )}
         </View>
         <Text style={styles.categories} numberOfLines={2}>
           {sale.categories.join(' · ')}

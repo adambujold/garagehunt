@@ -237,6 +237,9 @@ export default function SaleDetailScreen() {
         <View style={styles.tagRow}>
           <PriceTag label={sale.tagLabel} variant={sale.tagVariant} rotate={-2} />
           {hotTier && <PriceTag label={HOT_TIER_LABELS[hotTier]} variant={hotTier} rotate={-3} />}
+          {sale.paymentMethod === 'cash_and_etransfer' && (
+            <PriceTag label="💸 Cash + e-Transfer" variant="etransfer" rotate={-2} />
+          )}
         </View>
 
         <View style={styles.chipRow}>
