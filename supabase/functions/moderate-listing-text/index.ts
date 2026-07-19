@@ -117,6 +117,10 @@ Deno.serve(async (req) => {
         max_tokens: 200,
         messages: [{ role: 'user', content: userMessage }],
       }),
+      // See moderate-listing-photo/index.ts's identical timeout for why —
+      // fail safe to "flag" quickly on a slow Anthropic response instead of
+      // leaving the publish attempt hanging on the platform's own timeout.
+      signal: AbortSignal.timeout(20000),
     });
 
     if (anthropicResponse.ok) {
