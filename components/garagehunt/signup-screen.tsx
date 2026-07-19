@@ -21,13 +21,13 @@ import { signInWithApple } from '@/utils/apple-auth';
 import { getErrorMessage } from '@/utils/get-error-message';
 import { signInWithGoogle } from '@/utils/google-auth';
 import { supabase } from '@/utils/supabase';
-
-// Bump this (and the corresponding hosted document) any time the Terms of
-// Service or Privacy Policy materially changes — a simple date string, not a
-// semver, since there's no automated versioning of the hosted HTML.
-const TERMS_VERSION = '2026-07-11';
-const PRIVACY_POLICY_URL = 'https://adambujold.github.io/garagehunt-legal/';
-const TERMS_OF_SERVICE_URL = 'https://adambujold.github.io/garagehunt-legal/terms.html';
+import {
+  currentUserNeedsTermsAcceptance,
+  PRIVACY_POLICY_URL,
+  recordTermsAcceptance,
+  TERMS_OF_SERVICE_URL,
+  TERMS_VERSION,
+} from '@/utils/terms-acceptance';
 
 // Real Supabase email/password, Google, and Apple auth. display_name is
 // stored in the auth user's metadata for now — syncing it into a dedicated
@@ -81,12 +81,18 @@ export function SignUpScreen({
     }
   };
 
+  const recordTermsAcceptanceIfNeeded = async () => {
+    const userId = await currentUserNeedsTermsAcceptance();
+    if (userId) await recordTermsAcceptance(userId);
+  };
+
   const handleGoogleSignIn = async () => {
     setError(null);
     setInfoMessage(null);
     setGoogleLoading(true);
     try {
       await signInWithGoogle();
+      await recordTermsAcceptanceIfNeeded();
     } catch (err) {
       setError(getErrorMessage(err, 'Something went wrong signing in with Google.'));
     } finally {
@@ -100,6 +106,7 @@ export function SignUpScreen({
     setAppleLoading(true);
     try {
       await signInWithApple();
+      await recordTermsAcceptanceIfNeeded();
     } catch (err) {
       setError(getErrorMessage(err, 'Something went wrong signing in with Apple.'));
     } finally {
@@ -121,7 +128,11 @@ export function SignUpScreen({
         </View>
 
         {Platform.OS === 'ios' && (
-          <Pressable style={styles.appleButton} onPress={handleAppleSignIn} disabled={anyLoading}>
+          <Pressable
+            style={[styles.appleButton, !agreedToTerms && styles.oauthButtonDisabled]}
+            onPress={handleAppleSignIn}
+            disabled={anyLoading || !agreedToTerms}
+          >
             {appleLoading ? (
               <ActivityIndicator color="#fff" />
             ) : (
@@ -133,7 +144,11 @@ export function SignUpScreen({
           </Pressable>
         )}
 
-        <Pressable style={styles.googleButton} onPress={handleGoogleSignIn} disabled={anyLoading}>
+        <Pressable
+          style={[styles.googleButton, !agreedToTerms && styles.oauthButtonDisabled]}
+          onPress={handleGoogleSignIn}
+          disabled={anyLoading || !agreedToTerms}
+        >
           {googleLoading ? (
             <ActivityIndicator color={Colors.coral} />
           ) : (
@@ -334,6 +349,9 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.displaySemiBold,
     fontSize: 13,
     color: Colors.ink,
+  },
+  oauthButtonDisabled: {
+    opacity: 0.4,
   },
   divider: {
     flexDirection: 'row',

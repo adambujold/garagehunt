@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -20,6 +21,7 @@ import { signInWithApple } from '@/utils/apple-auth';
 import { getErrorMessage } from '@/utils/get-error-message';
 import { signInWithGoogle } from '@/utils/google-auth';
 import { supabase } from '@/utils/supabase';
+import { currentUserNeedsTermsAcceptance, recordTermsAcceptance } from '@/utils/terms-acceptance';
 
 // Real Supabase email/password, Google, and Apple auth. A successful sign-in
 // updates the shared session (see hooks/use-auth-session.ts), which the root
@@ -48,11 +50,49 @@ export function LoginScreen({ onNavigateToSignUp }: { onNavigateToSignUp: () => 
     }
   };
 
+  // Unlike Sign Up, this screen has no Terms checkbox to gate on — but
+  // Supabase's OAuth sign-in silently creates a new account if one doesn't
+  // already exist, so "Continue with Google/Apple" here can be someone's
+  // very first time, same as Sign Up. Anyone (new or pre-existing) who
+  // hasn't recorded acceptance gets a required prompt before they're let
+  // in; declining signs them back out rather than leaving an authenticated
+  // session that never agreed to anything.
+  const requireTermsAcceptance = async () => {
+    const userId = await currentUserNeedsTermsAcceptance();
+    if (!userId) return;
+    await new Promise<void>((resolve) => {
+      Alert.alert(
+        'Terms of Service & Privacy Policy',
+        'By continuing, you agree to our Terms of Service and Privacy Policy.',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: async () => {
+              await supabase.auth.signOut();
+              setError('You need to agree to the Terms of Service and Privacy Policy to continue.');
+              resolve();
+            },
+          },
+          {
+            text: 'Agree & Continue',
+            onPress: async () => {
+              await recordTermsAcceptance(userId);
+              resolve();
+            },
+          },
+        ],
+        { cancelable: false }
+      );
+    });
+  };
+
   const handleGoogleSignIn = async () => {
     setError(null);
     setGoogleLoading(true);
     try {
       await signInWithGoogle();
+      await requireTermsAcceptance();
     } catch (err) {
       setError(getErrorMessage(err, 'Something went wrong signing in with Google.'));
     } finally {
@@ -65,6 +105,7 @@ export function LoginScreen({ onNavigateToSignUp }: { onNavigateToSignUp: () => 
     setAppleLoading(true);
     try {
       await signInWithApple();
+      await requireTermsAcceptance();
     } catch (err) {
       setError(getErrorMessage(err, 'Something went wrong signing in with Apple.'));
     } finally {
