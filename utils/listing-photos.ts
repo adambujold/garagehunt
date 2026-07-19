@@ -1,4 +1,5 @@
 import { File } from 'expo-file-system';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
 import { moderateListingPhoto } from '@/utils/moderation';
 import { supabase } from '@/utils/supabase';
@@ -29,6 +30,25 @@ function inferContentType(extension: string): string {
   return 'image/jpeg';
 }
 
+const HEIC_EXTENSIONS = new Set(['heic', 'heif']);
+
+// iPhones capture photos as HEIC by default. It's not a web-standard
+// format — no mainstream browser (or Next.js's server-side image
+// optimizer, which the companion website relies on) can decode it — so a
+// HEIC upload renders fine in this app but as a broken image everywhere
+// else. Converting to JPEG once here, at upload time, is simpler than
+// making every future consumer of these photos handle HEIC.
+async function normalizeToJpegIfHeic(
+  localUri: string,
+  extension: string
+): Promise<{ uri: string; extension: string }> {
+  if (!HEIC_EXTENSIONS.has(extension)) return { uri: localUri, extension };
+
+  const rendered = await ImageManipulator.manipulate(localUri).renderAsync();
+  const result = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.9 });
+  return { uri: result.uri, extension: 'jpg' };
+}
+
 export function getListingPhotoUrl(storageKey: string): string {
   return supabase.storage.from(PHOTO_BUCKET).getPublicUrl(storageKey).data.publicUrl;
 }
@@ -56,7 +76,7 @@ export async function fetchListingPhotos(listingId: string): Promise<ListingPhot
 // the bucket's RLS policies match against sale_listings.seller_id, so a
 // photo can only ever land under a listing the uploader owns.
 export async function uploadListingPhoto(listingId: string, localUri: string, sortOrder: number): Promise<ListingPhoto> {
-  const extension = inferExtension(localUri);
+  const { uri, extension } = await normalizeToJpegIfHeic(localUri, inferExtension(localUri));
   const contentType = inferContentType(extension);
   const randomName = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}.${extension}`;
   const storageKey = `${listingId}/${randomName}`;
@@ -65,7 +85,7 @@ export async function uploadListingPhoto(listingId: string, localUri: string, so
   // Android (works fine in a browser, but can silently produce a
   // corrupt/empty upload on-device) — expo-file-system's File.arrayBuffer()
   // reads the raw bytes directly and works identically on web and native.
-  const arrayBuffer = await new File(localUri).arrayBuffer();
+  const arrayBuffer = await new File(uri).arrayBuffer();
 
   // File.arrayBuffer() has been observed to silently resolve with a tiny
   // placeholder (e.g. a ~70-byte 1x1 PNG) instead of throwing when it can't
@@ -83,7 +103,18 @@ export async function uploadListingPhoto(listingId: string, localUri: string, so
   // uploaded at all, not uploaded-then-deleted. Read as base64 separately
   // from the arrayBuffer above (a second local read, not a second network
   // round trip) since that's the format Claude's vision API takes.
-  const imageBase64 = await new File(localUri).base64();
+  const imageBase64 = await new File(uri).base64();
+
+  // Same silent-corruption failure mode as arrayBuffer above, just never
+  // guarded on this second, independent read — confirmed as a real bug via
+  // Anthropic's API consistently rejecting one specific photo with
+  // "Could not process image" regardless of which model was asked, which
+  // only makes sense if the bytes reaching it were never a valid image to
+  // begin with. A real photo's base64 is always many times this size.
+  if (imageBase64.length < 1000) {
+    throw new Error('That photo could not be read. Please try again.');
+  }
+
   const decision = await moderateListingPhoto(imageBase64, contentType);
   if (decision === 'reject') {
     throw new Error("That photo doesn't meet our content guidelines. Please choose a different photo.");
