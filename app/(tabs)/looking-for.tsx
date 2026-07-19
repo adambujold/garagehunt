@@ -17,6 +17,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Chip } from '@/components/garagehunt/chip';
+import { DatePickerField } from '@/components/garagehunt/date-picker-field';
 import { OtherCategoryField } from '@/components/garagehunt/other-category-field';
 import { ToggleSwitch } from '@/components/garagehunt/toggle-switch';
 import { Colors, Fonts } from '@/constants/brand';
@@ -26,7 +27,6 @@ import { useAuthSession } from '@/hooks/use-auth-session';
 import { useCurrentLocation } from '@/hooks/use-current-location';
 import { getErrorMessage } from '@/utils/get-error-message';
 import { backfillMatchesForSavedSearch } from '@/utils/matches';
-import { formatDisplayDate, parseDisplayDate } from '@/utils/parse-sale-form-input';
 import { fetchMySavedSearch, saveSavedSearch } from '@/utils/saved-searches';
 
 const RADII_KM = [5, 10, 20, 50];
@@ -72,8 +72,8 @@ export default function LookingForScreen() {
           setOtherKeywordItems(existing.keywords);
           setRadiusKm(existing.radiusKm);
           setNotifyEnabled(existing.notifyEnabled);
-          setStartDate(existing.dateFrom ? formatDisplayDate(existing.dateFrom) : '');
-          setEndDate(existing.dateTo ? formatDisplayDate(existing.dateTo) : '');
+          setStartDate(existing.dateFrom ?? '');
+          setEndDate(existing.dateTo ?? '');
         }
       })
       .catch((err) => console.error('Failed to load saved search', err))
@@ -129,8 +129,8 @@ export default function LookingForScreen() {
     setSaveError(null);
     setSaving(true);
     try {
-      const dateFrom = startDate.trim() ? parseDisplayDate(startDate.trim()) : null;
-      const dateTo = endDate.trim() ? parseDisplayDate(endDate.trim()) : null;
+      const dateFrom = startDate || null;
+      const dateTo = endDate || null;
       const origin = coords ?? {
         latitude: DEFAULT_MAP_REGION.latitude,
         longitude: DEFAULT_MAP_REGION.longitude,
@@ -245,32 +245,26 @@ export default function LookingForScreen() {
 
         <Text style={styles.fieldLabel}>Date range (optional)</Text>
         <View style={styles.fieldRow}>
-          <View style={[styles.field, styles.fieldRowItem]}>
-            <Ionicons name="calendar-outline" size={14} color={Colors.muted} />
-            <TextInput
-              value={startDate}
-              onChangeText={(text) => {
-                setStartDate(text);
-                setSaveError(null);
-              }}
-              placeholder="Any date"
-              placeholderTextColor={Colors.mutedLight}
-              style={styles.fieldInput}
-            />
-          </View>
-          <View style={[styles.field, styles.fieldRowItem]}>
-            <Ionicons name="calendar-outline" size={14} color={Colors.muted} />
-            <TextInput
-              value={endDate}
-              onChangeText={(text) => {
-                setEndDate(text);
-                setSaveError(null);
-              }}
-              placeholder="Any date"
-              placeholderTextColor={Colors.mutedLight}
-              style={styles.fieldInput}
-            />
-          </View>
+          <DatePickerField
+            value={startDate}
+            onChange={(iso) => {
+              setStartDate(iso);
+              if (endDate && endDate < iso) setEndDate(iso);
+              setSaveError(null);
+            }}
+            placeholder="Any date"
+            style={[styles.field, styles.fieldRowItem]}
+          />
+          <DatePickerField
+            value={endDate}
+            onChange={(iso) => {
+              setEndDate(iso);
+              setSaveError(null);
+            }}
+            minimumDateIso={startDate || undefined}
+            placeholder="Any date"
+            style={[styles.field, styles.fieldRowItem]}
+          />
         </View>
         <Text style={styles.fieldHint}>Leave blank to match sales on any date.</Text>
 
