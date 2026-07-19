@@ -81,6 +81,7 @@
 | title | text | nullable; seller-editable headline. If null, display falls back to the existing auto-derived address-based title (e.g., "Maple Street garage sale") — this is additive, not a change to current default behavior. |
 | description | text | nullable |
 | moderation_status | enum | `clean`, `pending_review`, `rejected` — default `clean`. Set by the Anthropic-based text moderation check at submit time, or forced to `pending_review` regardless of screening result if this is the seller's first-ever listing (account-level trust signal, Section 9 feature spec). A `pending_review` listing still publishes immediately (not blocked, given listings are time-sensitive) — pulled down only if manual review in the Supabase dashboard finds a real problem. |
+| payment_method | enum | `cash_only`, `cash_and_etransfer` — default `cash_only`. Deliberately a simple binary, not a broader multi-select — cash is always implicitly available at a garage sale, this just captures whether e-Transfer is also accepted. Displayed as a badge on the listing card and Sale Detail; not currently a Discover filter. |
 | other_items | text[] | nullable; free-tag entries from the "Other" category input (e.g., "guitar," "vinyl records") — stored as a list, not appended into `description`, so each tag is a discrete match target for the same keyword-matching pipeline used against buyers' `saved_searches.keywords` |
 | event_id | uuid | FK → town_wide_events, nullable |
 | view_count / favorite_count | int | denormalized counters, updated async |
@@ -230,8 +231,10 @@ This is a query-time concern, not just a storage concern — the API must never 
 2. **Auto-suggest:** API queries listings within radius + date window, scores each by `distance_weight + category_match_weight` (category match = overlap with the user's `saved_searches` or stated interests), takes the top-N cluster, then feeds that set through the same optimization call as manual mode. The "swap" action re-runs the scoring query excluding already-selected/rejected listings and substitutes the next-best result.
 
 ### Matching & notifications
-- On listing publish (status → scheduled or live): async job scans `saved_searches` within the listing's radius, inserts `matches` rows for hits, triggers push via FCM/APNs.
+- **Originally implemented as a client-side "best-effort" side effect** (mobile app called `computeAndInsertMatches` after a successful publish) — **corrected during companion website Phase 2d work**, once building the website's saved-searches feature surfaced a real reliability gap: a client-side side effect isn't guaranteed to fire (e.g., app closing/crashing right after publish), and it also meant matches would never compute at all for listings published through the website, since that logic only ever existed in the mobile codebase.
+- **Now implemented as a guaranteed backend trigger** — same `pg_net` trigger pattern already used for push notifications (Section 7). Fires on `sale_listings` publish (status → scheduled or live) **regardless of which client did the publishing**, scans `saved_searches` within the listing's radius, inserts `matches` rows for hits. This benefits mobile too, not just the website — a real reliability fix, not merely a website workaround.
 - Category matching is exact-set overlap for MVP (Phase 1). Keyword matching against free-text `description` is a Phase 2 addition — needs at least basic text search (Postgres full-text search or a lightweight embedding-based match) rather than naive substring matching, to catch synonyms.
+- **Website match notification channel: immediate per-match email**, not a batched/scheduled digest, via Resend (already integrated for admin notifications) — same trigger fires an email in addition to (or instead of, for a web-only user) the mobile push, keeping notification *timing* consistent across platforms even though the *channel* differs. Deliberately not a scheduled/cron-based digest, consistent with this project's "derive at query time over cron jobs" principle.
 
 ### Moderation pipeline
 - **Reuses the existing Anthropic API integration** (already wired via Supabase Edge Function for AI-assisted listing descriptions) rather than adding a separate image/text moderation vendor — one already-paid-for, already-integrated service handles both.
@@ -347,3 +350,55 @@ The Edge Function:
 - **Full-text/keyword matching approach for Phase 2** — plain Postgres `tsvector` search is simplest to ship; an embedding-based similarity search would catch more synonyms but adds real infrastructure (vector DB or pgvector) for a marginal MVP gain — recommend deferring.
 - **Fuzzing algorithm specifics** — random offset within an annulus (not a simple bounding box) so the fuzzed point doesn't systematically land in a shape that reveals the true point's boundary.
 - **⚠️ Time-sensitive: legacy Supabase JWT-format API keys, deprecated by end of 2026.** Both webhook Edge Functions (`send-match-notification` and `revenuecat-webhook`) currently authenticate using the legacy JWT-format `service_role` key (`eyJhbGciOi...`) in their Authorization header, relying on Supabase's default `verify_jwt = true` setting on the function. Supabase's newer key format (`sb_secret_...`) is an opaque token, **not** a JWT, and fails that verification outright — confirmed by direct testing, not just documentation. **Before Supabase fully deprecates the legacy JWT-format keys (end of 2026 per their own timeline), both functions need migrating:** set `verify_jwt = false` on each function and implement a custom shared-secret header check instead of relying on Supabase's built-in JWT gate. Until then, the current setup is correct and working — this is a forward-looking action item with a real deadline, not a bug to fix now.
+
+---
+
+## 9. Companion Website — Backend Considerations
+
+### Phase 1 (public browsing)
+
+**New RLS requirement, genuinely different from the mobile app:** every screen in the mobile app requires an authenticated session — there has never been a genuinely public, unauthenticated read path into the data. Phase 1 of the companion website needs exactly that, for its SEO-crawlable public pages (general browse, individual sale detail, town-wide event pages).
+
+**What actually got built (bigger and better than originally planned):** this section originally called for a scoped `anon` RLS policy on `sale_listings` directly — but building this surfaced a real, pre-existing gap: address-fuzzing had **never** been enforced at the database level, for anyone, mobile included (only in the app's UI). The actual fix went further: `sale_listings` was renamed to `sale_listings_raw`, and a view named `sale_listings` now computes fuzzed fields per-row via `INSTEAD OF` triggers, gated on `now() >= reveal_at OR immediate_reveal_opt_in OR viewer_is_seller` — applied identically regardless of platform (app or website) or auth state (logged in or anonymous). Two Database Webhooks (hot-tier and match notifications) were repointed to `sale_listings_raw`; manual moderation review in the Supabase dashboard now also targets `sale_listings_raw`.
+
+**Data fetching approach:** Next.js Server Components/Server-Side Rendering query Supabase directly for these public pages (using the `anon` key, reading from the `sale_listings` view, which handles fuzzing automatically) — this is what makes the pages genuinely crawlable, since content renders server-side before a search engine bot ever needs to execute client-side JavaScript.
+
+### Phase 2a (auth — email/password + Google, this pass; Apple web sign-in deferred)
+
+**Email/password and Google:** both should be able to reuse the exact same Supabase Auth configuration already set up for mobile — these are configured at the Supabase-project level, not per-platform. Google's OAuth redirect URI (`https://[project].supabase.co/auth/v1/callback`) is shared across every client using this Supabase project, so the existing Google Cloud OAuth client/secret should work for the website without creating a new one — **verify this rather than assume**, since it's the kind of thing worth confirming with a real test login rather than treating as certain.
+
+**Apple Sign-In on web — explicitly deferred, real reason why:** mobile's native Apple Sign-In flow (`expo-apple-authentication` + `signInWithIdToken`) was specifically chosen to avoid needing a Services ID. Web has no equivalent native path — it requires Apple's actual OAuth flow, meaning a **Services ID** (a distinct Apple Developer Console credential type from the app's bundle ID) plus a **JWT-based client secret** that Apple requires regenerating periodically (up to every 6 months). This is real, separate Apple Developer Console setup — deliberately scoped as its own follow-up step, not bundled into this pass.
+
+**Session handling:** Next.js middleware checks the Supabase session cookie on every request to gate logged-in-only routes (List a Sale, Favorites, Saved Searches once built) — redirecting to `/login` if absent, consistent with how the mobile app gates screens behind auth state.
+
+### Phase 2b (List a Sale)
+
+**Form fields, same as mobile's List a Sale flow (Section 3, feature spec):** address (Mapbox Search API autocomplete — the mobile implementation already calls this directly via `fetch`, a plain REST call that's directly portable to web with no SDK-specific rework needed), date range/time, categories + "Other" tags, title, **payment method toggle** (Cash only / Cash + e-Transfer — already in the schema, include it), description, AI-assisted title/description (reuses the exact same Anthropic Edge Function mobile calls, no new backend), join a town-wide event if one exists nearby, review, publish.
+
+**Write path:** inserts go through the `sale_listings` view (not `sale_listings_raw` directly) — the `INSTEAD OF` triggers built for the address-fuzzing fix were specifically designed so any client's normal insert/update keeps working unchanged, mobile or web.
+
+**Photo upload — file picker instead of camera, and web-specific HEIC handling:** unlike mobile (where `expo-image-manipulator` handles HEIC transcoding), that tool doesn't exist in a browser. Use a WebAssembly-based client-side library (e.g., `heic2any`) to detect and transcode HEIC/HEIF files to JPEG **before upload**, mirroring the exact same "transcode at the source, never store raw HEIC" principle established on mobile — not a different philosophy, just a different tool for a different runtime.
+
+### Phase 2c (Favorites)
+
+No new backend — reuses the existing `favorites` table and `favorite_count` trigger mobile already relies on. Heart toggle on listing cards (Discover) and Sale Detail, plus a `/favorites` page (already gated by Phase 2a's middleware). Logged-out users clicking the heart should redirect to `/login?redirectTo=...`, consistent with how the middleware already handles other protected routes — not a silently-failing click.
+
+### Phase 2d (Saved searches + email alerts)
+
+**Saved searches UI:** mirrors mobile's "I'm Looking For" flow — categories, keywords, radius. Writes to the existing `saved_searches` table, no new schema.
+
+**Matching itself is now backend-guaranteed** (see "Matching & notifications" above) — the website doesn't need to compute or trigger matches itself at all, just create the `saved_searches` row and let the existing (now-corrected) backend trigger handle the rest, same as mobile.
+
+**Email delivery:** extend the existing `pg_net`-trigger → Edge Function pattern (Section 7) to also send via Resend when a match is inserted for a saved search that has no corresponding mobile push token (or as a supplementary channel regardless — worth deciding whether email is web-only-fallback or sent alongside push for all users; recommend supplementary-for-all initially, since a user might genuinely prefer checking email over a push notification, and simplicity of "always send both channels" beats conditional logic for an MVP).
+
+### Phase 3 (Route planning)
+
+**Map:** Mapbox GL JS specifically (per the original spec's explicit call-out) — already the library Phase 1 uses for the browse/detail map, so this is reusing an existing dependency, not adding a new one.
+
+**Route optimization:** mobile calls Mapbox's Directions/Optimization API directly via `fetch` — a plain REST call, not an SDK-specific feature, so this is directly portable to web with no rework, same principle as Phase 2b's address autocomplete port.
+
+**Both modes, mirroring mobile:** Manual Pick (from the user's own favorites) and Auto-Suggest (weighted by proximity/category match to saved searches/quality signals) — **investigate the actual mobile Auto-Suggest implementation before designing the web version**, rather than assuming the mechanism, since it's not yet confirmed whether the scoring logic is client-side or partially server-side (the matching engine turned out to be more server-side than assumed going into Phase 2d — worth checking rather than guessing here too).
+
+**Navigation — a real product decision, not just technical:** desktop/web has no native turn-by-turn equivalent to mobile's "Start Navigation." Decided approach: offer **both** (a) an immediate **"Open in Google Maps"** link using Google's multi-stop directions URL format (`google.com/maps/dir/?api=1&origin=...&destination=...&waypoints=...`), which works as a real link on any device (opens the app directly if installed, browser fallback otherwise), and (b) an **"Email me these directions"** action (reusing the Resend infrastructure from Phase 2d) — solving the real cross-device case of planning on a desktop but actually navigating from a phone later. Not an either/or — both serve genuinely different real moments.
+
+**"Share my route"** — mobile already has this; port the same behavior to web for consistency (already using the `garagehunt://` deep link scheme for mobile shares; web shares should use real `https://garagehunt.ca/...` links instead, not the mobile-only custom scheme).

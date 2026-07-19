@@ -47,17 +47,18 @@
 
 1. Tap **"+ List a Sale"**
 2. **Location** — auto-pulled from device GPS or manually entered address (street-level, not exact pin optional for privacy until day-of). **Manual entry uses live address autocomplete** as the seller types (via Mapbox's Search API), showing real matching addresses to pick from — reduces typos and speeds up entry, same principle as any modern address form.
-3. **Date range & time** — a start date and end date (e.g., Sat–Sun), with one shared daily time window (e.g., 9am–2pm) applied across every day in the range. A single-day sale is simply a range where start date = end date — no separate "add another day" step needed.
+3. **Date range & time** — a start date and end date (e.g., Sat–Sun), with one shared daily time window (e.g., 9am–2pm) applied across every day in the range. A single-day sale is simply a range where start date = end date — no separate "add another day" step needed. **Fields start empty (no stale/incorrect pre-filled default), and tapping opens a real visual calendar picker** — never a raw text field requiring the seller to erase and retype an existing value. This is a genuine bug fix, not just a preference: an earlier implementation defaulted to a date over a week in the past and required manual text editing to correct, found during real-device testing.
 4. **Photos** — upload up to 10 (teaser shots of items, signage, etc.)
 5. **Categories carried** — multi-select tags:
    - Furniture, Kids/Baby, Clothing, Tools, Electronics, Sporting Goods, Books/Media, Kitchenware, Antiques/Collectibles, Garden/Outdoor, Other
    - **Selecting "Other" reveals a tag-style text input** — *"What else are you bringing?"* Typing something and pressing return/enter adds it as a removable bubble/chip, and the field clears for the next entry, so a seller can add several other items (e.g., "guitar," "vinyl records," "power tools") rather than being limited to one. These entries are stored as a list on the listing and feed into the same keyword-matching pipeline as the description (see 4c) — not just appended as plain text.
 6. **Title** (optional) — a short, editable headline for the listing (e.g., "Huge Moving Sale — Furniture & Tools"). If left blank, defaults to an auto-derived title from the address (e.g., "Maple Street garage sale"), as it does today — this is a new field, not a change to existing default behavior.
-7. **Description** — free text (optional): "Moving sale, everything must go," etc.
-8. **AI-assisted title & description ("✨ Get AI suggestions"):** a button on this step generates a suggested title and description from whatever the seller's already provided (selected categories, any "Other" tags), plus one optional free-text prompt for anything else to mention. The seller sees the suggestion and can **accept, edit, or regenerate** — nothing is inserted without them seeing and approving it. This calls Anthropic's Claude API via a Supabase Edge Function (keeps the API key secret server-side, never bundled in the app). **Regeneration is rate-limited per user** (e.g., a handful per hour) — same cost/abuse-protection philosophy already applied to route requests, since this is a real pay-per-use API call, not free.
-9. **Join a town-wide event?** — if an Organizer has created an event in their area/date, seller can request to be added to it
-10. Review → **Publish**
-11. Confirmation screen: "Your sale is live!" with share-to-social option
+7. **Payment accepted** — a simple two-option toggle: **"Cash only"** or **"Cash + e-Transfer."** Cash is always assumed available (implicit in every garage sale), so this isn't a broader multi-select — just whether the seller also accepts Interac e-Transfer, a real convenience signal for buyers who don't carry cash. Defaults to "Cash only" if not changed. Displayed as a small tag on the listing card and Sale Detail, reusing the existing masking-tape badge system (consistent visual language, not a new component) — not a Discover filter for now, just a visible label.
+8. **Description** — free text (optional): "Moving sale, everything must go," etc.
+9. **AI-assisted title & description ("✨ Get AI suggestions"):** a button on this step generates a suggested title and description from whatever the seller's already provided (selected categories, any "Other" tags), plus one optional free-text prompt for anything else to mention. The seller sees the suggestion and can **accept, edit, or regenerate** — nothing is inserted without them seeing and approving it. This calls Anthropic's Claude API via a Supabase Edge Function (keeps the API key secret server-side, never bundled in the app). **Regeneration is rate-limited per user** (e.g., a handful per hour) — same cost/abuse-protection philosophy already applied to route requests, since this is a real pay-per-use API call, not free.
+10. **Join a town-wide event?** — if an Organizer has created an event in their area/date, seller can request to be added to it
+11. Review → **Publish**
+12. Confirmation screen: "Your sale is live!" with share-to-social option
 
 **Sale lifecycle states:** Draft → Scheduled → Live (auto-flips on start date/time) → Ended (auto-archives) → (optional) Sold Out/Cancelled toggle
 
@@ -329,6 +330,8 @@ Identified as a gap during the pre-testing polish pass — only a generic native
 
 ---
 
+## 13. Companion Website
+
 **Scope decision:** Full parity with the app — not a stripped-down public browsing tool. Sellers and buyers should be able to do everything on the website that they can do in the app: register/login, list a sale, browse/route-plan, use matching/alerts, and (for verified organizers) manage events.
 
 **Shared backend:** The website is a second frontend on top of the same API, database, and auth system already designed for the app — no separate backend needed. This is one of the main advantages of getting the architecture right before starting on the website.
@@ -339,6 +342,14 @@ Identified as a gap during the pre-testing polish pass — only a generic native
 - **Maps** use Mapbox GL JS (the web SDK) instead of the mobile Maps SDK — same underlying Mapbox account and data, different library.
 - **Layout** needs real responsive design — the mobile mockups we built are single-column, phone-width; the website needs wider desktop layouts (e.g., map + list side-by-side rather than stacked/toggled).
 - **SEO** matters even with full parity — individual sale detail pages and town-wide event pages should be crawlable/indexable (with fuzzed location data pre-reveal, consistent with the privacy rules) since organic search is a realistic discovery channel for "garage sales near me"-type queries, independent of the login-gated features.
+
+**Build phasing** (decided once actual implementation started — the sections above describe the full end-state, this is the rollout order):
+1. **Phase 1 — Public, SEO-crawlable browsing, no login required.** General browse/discover page, individual sale detail pages, town-wide event pages. Highest-value starting point on its own, since this is the one piece of "full parity" that specifically can't be replaced by just downloading the app — it's the organic-search discovery layer.
+2. **Phase 2 — Auth + core interactive parity.** Register/login, list a sale, favorite, saved searches/match alerts (email digest as the practical fallback for web push's noted reliability gap).
+3. **Phase 3 — Route planning**, via Mapbox GL JS specifically.
+4. **Phase 4 — Organizer tools**, lowest urgency given smallest user base.
+
+**Stack:** Next.js, chosen specifically because it handles both Phase 1's server-rendered/SEO-critical pages and Phase 2+'s fully interactive logged-in app well in one codebase — not just a default choice. Hosted on Vercel (pairs naturally with Next.js), connected to the already-owned `garagehunt.ca` domain. **Shared Supabase backend** — same project, same tables, no new backend service; the website is purely a second frontend.
 
 ---
 
