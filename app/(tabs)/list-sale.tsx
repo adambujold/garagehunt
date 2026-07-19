@@ -21,8 +21,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AddressPreviewMap } from '@/components/garagehunt/address-preview-map';
 import { AiSuggestionModal } from '@/components/garagehunt/ai-suggestion-modal';
 import { Chip } from '@/components/garagehunt/chip';
+import { DatePickerField } from '@/components/garagehunt/date-picker-field';
 import { OtherCategoryField } from '@/components/garagehunt/other-category-field';
+import { PaymentMethodToggle } from '@/components/garagehunt/payment-method-toggle';
 import { PhotoSourceSheet } from '@/components/garagehunt/photo-source-sheet';
+import { PaymentMethod } from '@/components/garagehunt/sale-card';
 import { ToggleSwitch } from '@/components/garagehunt/toggle-switch';
 import { Colors, Fonts } from '@/constants/brand';
 import { CATEGORIES } from '@/constants/categories';
@@ -39,7 +42,7 @@ import {
   suggestAddresses,
 } from '@/utils/mapbox-address-search';
 import { geocodeAddress } from '@/utils/mapbox-geocoding';
-import { formatDisplayDate, parseDisplayDate, parseDisplayTimeRange } from '@/utils/parse-sale-form-input';
+import { formatDisplayDate, parseDisplayTimeRange } from '@/utils/parse-sale-form-input';
 import { pickListingPhoto, takeListingPhoto } from '@/utils/pick-listing-photo';
 import { createSaleListing, publishSaleListing } from '@/utils/sale-listings';
 import {
@@ -84,9 +87,12 @@ export default function ListSaleScreen() {
   // doesn't cover this specific TextInput-blur-vs-Pressable-tap race.
   const addressBlurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Mirrors sale_listings.start_date/end_date — equal values represent a
-  // single-day sale, per the feature spec (Section 3, step 3).
-  const [startDate, setStartDate] = useState('Sat, Jul 11');
-  const [endDate, setEndDate] = useState('Sat, Jul 11');
+  // single-day sale, per the feature spec (Section 3, step 3). ISO
+  // "YYYY-MM-DD" strings, same as the DB column, or "" for genuinely
+  // unselected — no default date pre-filled (a real bug fixed here: this
+  // used to default to a hardcoded, silently-stale date).
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [time, setTime] = useState('9am–2pm');
   const [showExactAddress, setShowExactAddress] = useState(false);
 
@@ -101,6 +107,7 @@ export default function ListSaleScreen() {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [categories, setCategories] = useState<string[]>(['Furniture']);
   const [title, setTitle] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash_only');
   const [description, setDescription] = useState('');
   // Mirrors sale_listings.other_items — a discrete tag list, not appended
   // into description, per the technical architecture doc.
@@ -124,12 +131,7 @@ export default function ListSaleScreen() {
     let cancelled = false;
     setMatchedEvent(undefined);
 
-    let startDateIso: string;
-    let endDateIso: string;
-    try {
-      startDateIso = parseDisplayDate(startDate);
-      endDateIso = parseDisplayDate(endDate);
-    } catch {
+    if (!startDate || !endDate) {
       setMatchedEvent(null);
       return;
     }
@@ -139,7 +141,7 @@ export default function ListSaleScreen() {
       longitude: DEFAULT_MAP_REGION.longitude,
     };
 
-    findNearbyEvent({ latitude: origin.latitude, longitude: origin.longitude, startDate: startDateIso, endDate: endDateIso })
+    findNearbyEvent({ latitude: origin.latitude, longitude: origin.longitude, startDate, endDate })
       .then((event) => {
         if (cancelled) return;
         setMatchedEvent(event);
@@ -314,8 +316,8 @@ export default function ListSaleScreen() {
     setPublishError(null);
     setPublishing(true);
     try {
-      const startDateIso = parseDisplayDate(startDate);
-      const endDateIso = parseDisplayDate(endDate);
+      const startDateIso = startDate;
+      const endDateIso = endDate;
       const { startTime, endTime } = parseDisplayTimeRange(time);
       // A live public listing needs its real address geocoded, not the
       // seller's live GPS position — those only coincide if the seller
@@ -344,6 +346,7 @@ export default function ListSaleScreen() {
         dailyStartTime: startTime,
         dailyEndTime: endTime,
         title,
+        paymentMethod,
         description,
         otherItems,
         categoryNames: categories,
@@ -353,7 +356,7 @@ export default function ListSaleScreen() {
       // got flagged/rejected), the listing stays saved as a draft — the
       // error banner below surfaces exactly why, and My Listings already
       // shows drafts with a "Finish listing" prompt either way.
-      await publishSaleListing({ id: listingId, description, otherItems, categoryIds });
+      await publishSaleListing({ id: listingId, description });
       try {
         await submitPendingEventJoinRequest(listingId, session.user.id);
       } catch (err) {
@@ -385,8 +388,8 @@ export default function ListSaleScreen() {
     setPublishError(null);
     setSavingDraft(true);
     try {
-      const startDateIso = parseDisplayDate(startDate);
-      const endDateIso = parseDisplayDate(endDate);
+      const startDateIso = startDate;
+      const endDateIso = endDate;
       const { startTime, endTime } = parseDisplayTimeRange(time);
       const origin = coords ?? {
         latitude: DEFAULT_MAP_REGION.latitude,
@@ -411,6 +414,7 @@ export default function ListSaleScreen() {
         dailyStartTime: startTime,
         dailyEndTime: endTime,
         title,
+        paymentMethod,
         description,
         otherItems,
         categoryNames: categories,
@@ -445,7 +449,11 @@ export default function ListSaleScreen() {
     }
   };
 
-  const dateRangeLabel = startDate === endDate ? startDate : `${startDate} – ${endDate}`;
+  const dateRangeLabel = !startDate
+    ? ''
+    : startDate === endDate
+      ? formatDisplayDate(startDate)
+      : `${formatDisplayDate(startDate)} – ${formatDisplayDate(endDate)}`;
 
   const handleShareSale = async () => {
     if (!publishedListingId) return;
@@ -582,14 +590,22 @@ export default function ListSaleScreen() {
 
             <Text style={styles.fieldLabel}>Date range</Text>
             <View style={styles.fieldRow}>
-              <View style={[styles.field, styles.fieldRowItem]}>
-                <Ionicons name="calendar-outline" size={14} color={Colors.muted} />
-                <TextInput value={startDate} onChangeText={setStartDate} style={styles.fieldInput} />
-              </View>
-              <View style={[styles.field, styles.fieldRowItem]}>
-                <Ionicons name="calendar-outline" size={14} color={Colors.muted} />
-                <TextInput value={endDate} onChangeText={setEndDate} style={styles.fieldInput} />
-              </View>
+              <DatePickerField
+                value={startDate}
+                onChange={(iso) => {
+                  setStartDate(iso);
+                  // Keep a same-day sale in sync, and never leave the end
+                  // date sitting before a newly-picked later start date.
+                  if (!endDate || endDate < iso) setEndDate(iso);
+                }}
+                style={[styles.field, styles.fieldRowItem]}
+              />
+              <DatePickerField
+                value={endDate}
+                onChange={setEndDate}
+                minimumDateIso={startDate || undefined}
+                style={[styles.field, styles.fieldRowItem]}
+              />
             </View>
             <Text style={styles.fieldHint}>
               Single-day sale? Leave the end date the same as the start date.
@@ -691,6 +707,9 @@ export default function ListSaleScreen() {
                 style={styles.fieldInput}
               />
             </View>
+
+            <Text style={styles.fieldLabel}>Payment accepted</Text>
+            <PaymentMethodToggle value={paymentMethod} onChange={setPaymentMethod} />
 
             <Text style={styles.fieldLabel}>Description</Text>
             <TextInput

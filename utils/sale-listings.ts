@@ -1,11 +1,10 @@
-import { MockSale } from '@/components/garagehunt/sale-card';
+import { MockSale, PaymentMethod } from '@/components/garagehunt/sale-card';
 import { PriceTagVariant } from '@/constants/brand';
 import { Coordinates } from '@/hooks/use-current-location';
 import { detectClusterForListing } from '@/utils/cluster-suggestions';
 import { formatSaleSchedule } from '@/utils/format-sale-schedule';
 import { BOOST_DURATION_HOURS, deriveIsBoosted } from '@/utils/listing-boost';
 import { getListingPhotoUrl } from '@/utils/listing-photos';
-import { computeAndInsertMatches } from '@/utils/matches';
 import { moderateListingText } from '@/utils/moderation';
 import { formatTimeOfDay } from '@/utils/parse-sale-form-input';
 import { fetchSellerRatings } from '@/utils/reviews';
@@ -67,6 +66,7 @@ export type DbSaleListingRow = {
   event_id: string | null;
   is_boosted: boolean;
   boost_expires_at: string | null;
+  payment_method: PaymentMethod;
   listing_categories: { categories: { name: string } | null }[] | null;
   listing_photos: { storage_key: string; sort_order: number }[] | null;
 };
@@ -75,6 +75,7 @@ export const LISTING_SELECT = `
   id, seller_id, latitude, longitude, address_text, start_date, end_date,
   daily_start_time, daily_end_time, status, title, description, other_items,
   favorite_count, checkin_count, event_id, is_boosted, boost_expires_at,
+  payment_method,
   listing_categories(categories(name)), listing_photos(storage_key, sort_order)
 `;
 
@@ -148,6 +149,7 @@ export function mapRowToSaleView(row: DbSaleListingRow, origin: Coordinates | nu
     checkinCount: row.checkin_count,
     eventId: row.event_id,
     isBoosted: deriveIsBoosted(row.is_boosted, row.boost_expires_at),
+    paymentMethod: row.payment_method,
     photos: sortedPhotoUrls(row.listing_photos),
     // Filled in by attachSellerRatings below — mapRowToSaleView itself has
     // no seller-rating data to work with (that lives in public.users, a
@@ -254,6 +256,7 @@ export type CreateSaleListingInput = {
   dailyStartTime: string;
   dailyEndTime: string;
   title?: string;
+  paymentMethod: PaymentMethod;
   description: string;
   otherItems: string[];
   categoryNames: string[];
@@ -290,6 +293,7 @@ export async function createSaleListing(input: CreateSaleListingInput): Promise<
       daily_end_time: input.dailyEndTime,
       status: 'draft',
       title: input.title?.trim() ? input.title.trim() : null,
+      payment_method: input.paymentMethod,
       description: input.description || null,
       other_items: input.otherItems,
     })
@@ -325,8 +329,6 @@ export async function createSaleListing(input: CreateSaleListingInput): Promise<
 export type PublishSaleListingInput = {
   id: string;
   description: string;
-  otherItems: string[];
-  categoryIds: string[];
 };
 
 // The gate a draft listing must pass to become published (feature spec
@@ -339,7 +341,7 @@ export type PublishSaleListingInput = {
 export async function publishSaleListing(input: PublishSaleListingInput): Promise<void> {
   const { data: listingRow, error: fetchError } = await supabase
     .from('sale_listings')
-    .select('seller_id, latitude, longitude, start_date, end_date')
+    .select('seller_id')
     .eq('id', input.id)
     .single();
   if (fetchError) throw fetchError;
@@ -357,7 +359,7 @@ export async function publishSaleListing(input: PublishSaleListingInput): Promis
   if (photosError) throw photosError;
   if ((photos ?? []).some((photo) => photo.moderation_status !== 'approved')) {
     throw new Error(
-      "One or more of your photos is still being reviewed. Your listing has been saved as a draft — try publishing again in a few minutes, or remove/replace the photo."
+      "One or more of your photos was flagged for manual review and can't be auto-approved — publishing again won't change that. Your listing has been saved as a draft; remove/replace the flagged photo, or wait for it to be manually approved."
     );
   }
 
@@ -384,29 +386,17 @@ export async function publishSaleListing(input: PublishSaleListingInput): Promis
   const moderationStatus: 'clean' | 'pending_review' =
     isFirstListing || textResult.decision === 'flag' ? 'pending_review' : 'clean';
 
+  // Match computation used to happen here client-side (computeAndInsertMatches)
+  // — moved server-side as of supabase/migrations/0035_server_side_match_computation.sql,
+  // a trigger on sale_listings_raw that fires on this exact status update
+  // regardless of which client performed it, so it no longer needs to be
+  // called from here (or from the website's equivalent publish flow).
   const { error: publishError } = await supabase
     .from('sale_listings')
     .update({ status: 'published', moderation_status: moderationStatus })
     .eq('id', input.id);
   if (publishError) throw publishError;
 
-  try {
-    await computeAndInsertMatches({
-      id: input.id,
-      latitude: listingRow.latitude,
-      longitude: listingRow.longitude,
-      startDate: listingRow.start_date,
-      endDate: listingRow.end_date,
-      description: input.description,
-      otherItems: input.otherItems,
-      categoryIds: input.categoryIds,
-    });
-  } catch (err) {
-    // Matching is a side effect of publishing, not core listing data —
-    // don't fail the whole publish over it, but don't swallow it silently
-    // either.
-    console.error('Failed to compute matches for new listing', err);
-  }
   try {
     await detectClusterForListing(input.id);
   } catch (err) {
@@ -502,6 +492,7 @@ export type EditableListing = {
   startDate: string;
   endDate: string;
   title: string | null;
+  paymentMethod: PaymentMethod;
   description: string;
   otherItems: string[];
   categoryNames: string[];
@@ -514,6 +505,7 @@ type DbEditableListingRow = {
   start_date: string;
   end_date: string;
   title: string | null;
+  payment_method: PaymentMethod;
   description: string | null;
   other_items: string[];
   status: SaleStatus;
@@ -527,7 +519,9 @@ type DbEditableListingRow = {
 export async function fetchEditableListing(id: string, sellerId: string): Promise<EditableListing | null> {
   const { data, error } = await supabase
     .from('sale_listings')
-    .select('id, address_text, start_date, end_date, title, description, other_items, status, listing_categories(categories(name))')
+    .select(
+      'id, address_text, start_date, end_date, title, payment_method, description, other_items, status, listing_categories(categories(name))'
+    )
     .eq('id', id)
     .eq('seller_id', sellerId)
     .maybeSingle();
@@ -546,6 +540,7 @@ export async function fetchEditableListing(id: string, sellerId: string): Promis
     startDate: row.start_date,
     endDate: row.end_date,
     title: row.title,
+    paymentMethod: row.payment_method,
     description: row.description ?? '',
     otherItems: row.other_items,
     categoryNames,
@@ -558,6 +553,7 @@ export type UpdateSaleListingInput = {
   startDate: string;
   endDate: string;
   title?: string;
+  paymentMethod: PaymentMethod;
   description: string;
   otherItems: string[];
   categoryNames: string[];
@@ -576,6 +572,7 @@ export async function updateSaleListing(input: UpdateSaleListingInput): Promise<
     start_date: input.startDate,
     end_date: input.endDate,
     title: input.title?.trim() ? input.title.trim() : null,
+    payment_method: input.paymentMethod,
     description: input.description || null,
     other_items: input.otherItems,
   };
@@ -615,12 +612,7 @@ export async function updateSaleListing(input: UpdateSaleListingInput): Promise<
   }
 
   if (input.publish) {
-    await publishSaleListing({
-      id: input.id,
-      description: input.description,
-      otherItems: input.otherItems,
-      categoryIds,
-    });
+    await publishSaleListing({ id: input.id, description: input.description });
   }
 }
 

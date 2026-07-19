@@ -6,10 +6,10 @@
 // payload shape is whatever that trigger's net.http_post body is, not
 // Supabase's standard {type, table, record} webhook envelope.
 //
-// Uses Resend's sandbox sender (onboarding@resend.dev), which works without
-// domain verification as long as the recipient is the Resend account's own
-// verified email — true here, since OWNER_EMAIL below is the same address
-// the Resend account was signed up with.
+// Sends from alerts@garagehunt.ca — garagehunt.ca is now a verified sending
+// domain in Resend, so this delivers to any recipient, not just the
+// account's own verified email the way the old onboarding@resend.dev
+// sandbox sender required.
 //
 // HOW TO DEPLOY: Supabase Dashboard → Edge Functions → "Deploy a new
 // function" → name it exactly `send-organizer-application-alert` → paste
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: 'GarageHunt <onboarding@resend.dev>',
+        from: 'GarageHunt <alerts@garagehunt.ca>',
         to: [OWNER_EMAIL],
         subject: `New organizer application from ${fullName}`,
         html: `
