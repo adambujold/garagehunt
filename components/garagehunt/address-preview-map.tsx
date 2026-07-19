@@ -18,11 +18,23 @@ export function AddressPreviewMap({ coordinates }: { coordinates: Coordinates | 
     ? { latitude: coordinates.latitude, longitude: coordinates.longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }
     : DEFAULT_MAP_REGION;
 
+  // initialRegion (set once), not the controlled region prop — this is a
+  // non-interactive preview (all gestures disabled below), so there's never
+  // a reason to keep re-applying a region on every render. Passing region
+  // meant a brand-new object literal reached Android's Google Maps SDK on
+  // every re-render of this screen (typing in any other field re-renders
+  // the whole form), which was observed to leave the map permanently blank
+  // there — iOS's MapKit tolerated the same churn fine. The key forces a
+  // clean remount (fresh initialRegion) when the address actually changes,
+  // e.g. after autocomplete resolves a new location.
+  const regionKey = coordinates ? `${coordinates.latitude.toFixed(4)},${coordinates.longitude.toFixed(4)}` : 'default';
+
   return (
     <View style={styles.card}>
       <MapView
+        key={regionKey}
         style={styles.map}
-        region={region}
+        initialRegion={region}
         scrollEnabled={false}
         zoomEnabled={false}
         rotateEnabled={false}

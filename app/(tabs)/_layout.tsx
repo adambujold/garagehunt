@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { Colors, Fonts } from '@/constants/brand';
-import { SpotlightRegistryProvider } from '@/contexts/spotlight-registry';
 import { useSpotlightTarget } from '@/hooks/use-spotlight-target';
 
 // Wraps each tab icon in a fixed-size, spotlight-measurable box — a real
@@ -116,9 +115,5 @@ function TabLayoutContent() {
 }
 
 export default function TabLayout() {
-  return (
-    <SpotlightRegistryProvider>
-      <TabLayoutContent />
-    </SpotlightRegistryProvider>
-  );
+  return <TabLayoutContent />;
 }

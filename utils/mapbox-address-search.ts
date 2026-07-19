@@ -15,10 +15,6 @@ import { Coordinates } from '@/hooks/use-current-location';
 
 const MAPBOX_TOKEN = process.env.EXPO_PUBLIC_MAPBOX_TOKEN;
 
-// Same reasoning as PROXIMITY_BBOX_DEGREES in mapbox-geocoding.ts — a
-// garage sale address search is hyper-local to the seller's current position.
-const PROXIMITY_BBOX_DEGREES = 0.5;
-
 export type AddressSuggestion = {
   // Mapbox's id for this suggestion — passed to retrieveAddress, not a
   // stable identifier for anything else.
@@ -57,18 +53,16 @@ export async function suggestAddresses(
     // location, not a region/place/POI lookup.
     types: 'address',
   });
+  // Soft ranking bias only, deliberately no bbox — unlike
+  // mapbox-geocoding.ts's one-shot fallback resolve (which needs a hard
+  // bbox to disambiguate an incomplete typed address), this is the live
+  // suggestion dropdown: a hard bbox here doesn't disambiguate anything,
+  // it just silently hides real addresses outside the box from ever
+  // appearing as a suggestion at all — confirmed as a real bug (a seller
+  // listing a sale outside their current immediate area got zero
+  // suggestions for their own address).
   if (proximityBias) {
     params.set('proximity', `${proximityBias.longitude},${proximityBias.latitude}`);
-    const d = PROXIMITY_BBOX_DEGREES;
-    params.set(
-      'bbox',
-      [
-        proximityBias.longitude - d,
-        proximityBias.latitude - d,
-        proximityBias.longitude + d,
-        proximityBias.latitude + d,
-      ].join(',')
-    );
   }
 
   const response = await fetch(`https://api.mapbox.com/search/searchbox/v1/suggest?${params.toString()}`);

@@ -13,6 +13,7 @@ import 'react-native-reanimated';
 import { LaunchSplash } from '@/components/garagehunt/launch-splash';
 import { LoginScreen } from '@/components/garagehunt/login-screen';
 import { SignUpScreen } from '@/components/garagehunt/signup-screen';
+import { SpotlightRegistryProvider } from '@/contexts/spotlight-registry';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useNotificationDeepLink } from '@/hooks/use-notification-deep-link';
@@ -107,23 +108,32 @@ export default function RootLayout() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="sale/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="route-planner" options={{ headerShown: false }} />
-        <Stack.Screen name="my-listings" options={{ headerShown: false }} />
-        <Stack.Screen name="edit-listing/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="listing-buyers/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="matches-for-you" options={{ headerShown: false }} />
-        <Stack.Screen name="settings" options={{ headerShown: false }} />
-        <Stack.Screen name="cluster-claim/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="create-event" options={{ headerShown: false }} />
-        <Stack.Screen name="event/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="organizer-application" options={{ headerShown: false }} />
-        <Stack.Screen name="organizer-dashboard" options={{ headerShown: false }} />
-        <Stack.Screen name="organizer-event/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
+      {/* Wraps the whole authenticated app, not just (tabs) — SaleCard (and
+          anything else using useSpotlightTarget) renders on plenty of
+          screens pushed outside the tab group (matches-for-you, sale/[id],
+          etc.), and useSpotlightRegistry throws if no provider is in scope.
+          Confirmed as a real crash via a real-device adb logcat capture:
+          opening Matches for You threw "useSpotlightRegistry must be used
+          within a SpotlightRegistryProvider" from SaleCard, every time. */}
+      <SpotlightRegistryProvider>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="sale/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="route-planner" options={{ headerShown: false }} />
+          <Stack.Screen name="my-listings" options={{ headerShown: false }} />
+          <Stack.Screen name="edit-listing/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="listing-buyers/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="matches-for-you" options={{ headerShown: false }} />
+          <Stack.Screen name="settings" options={{ headerShown: false }} />
+          <Stack.Screen name="cluster-claim/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="create-event" options={{ headerShown: false }} />
+          <Stack.Screen name="event/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="organizer-application" options={{ headerShown: false }} />
+          <Stack.Screen name="organizer-dashboard" options={{ headerShown: false }} />
+          <Stack.Screen name="organizer-event/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        </Stack>
+      </SpotlightRegistryProvider>
       <StatusBar style="auto" />
     </ThemeProvider>
   );
