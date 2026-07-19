@@ -22,8 +22,25 @@ import Purchases, { CustomerInfo, PurchasesPackage } from 'react-native-purchase
 // established for react-native-google-mobile-ads and expo-notifications.
 
 export const AD_FREE_ENTITLEMENT_ID = 'ad_free';
-export const AD_FREE_PRODUCT_ID = 'com.garagehunt.app.adfree.monthly';
-export const BOOST_PRODUCT_ID = 'com.garagehunt.app.boost';
+
+// Store product ids differ by platform, not just convention — Android
+// subscriptions carry a ":<basePlanId>" suffix on top of the product id
+// (Play Console's own product.identifier format), and the Boost product
+// happened to be created in Play Console under a different id than its App
+// Store counterpart. Matched against PurchasesPackage.product.identifier in
+// findPackageByProductId below, which is exactly what react-native-purchases
+// reports per platform, so this has to track the real per-store ids exactly
+// rather than a single shared constant.
+export const AD_FREE_PRODUCT_ID =
+  Platform.select({
+    ios: 'com.garagehunt.app.adfree.monthly',
+    android: 'com.garagehunt.app.adfree.monthly:monthly',
+  }) ?? 'com.garagehunt.app.adfree.monthly';
+export const BOOST_PRODUCT_ID =
+  Platform.select({
+    ios: 'com.garagehunt.app.boost',
+    android: 'com.garagehunt.app.boost.48h',
+  }) ?? 'com.garagehunt.app.boost';
 
 function getApiKeyForPlatform(): string | null {
   // `|| null`, not `?? null` — an unset env var and an env var explicitly

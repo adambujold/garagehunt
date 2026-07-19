@@ -37,7 +37,10 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const ENTITLEMENT_ID = 'ad_free';
-const BOOST_PRODUCT_ID = 'com.garagehunt.app.boost';
+// Boost was created under different product ids per store (iOS vs Android's
+// Play Console listing) — see utils/purchases.ts's BOOST_PRODUCT_ID comment
+// for why these can't be a single shared id.
+const BOOST_PRODUCT_IDS = ['com.garagehunt.app.boost', 'com.garagehunt.app.boost.48h'];
 
 type RevenueCatEvent = {
   type: string;
@@ -79,7 +82,7 @@ Deno.serve(async (req) => {
   // header comment), so they're handled entirely separately from the
   // ad-free branch below — best-effort logging only, never blocks/affects
   // the actual boost (already applied client-side by the time this fires).
-  if (event.type === 'NON_RENEWING_PURCHASE' && event.product_id === BOOST_PRODUCT_ID) {
+  if (event.type === 'NON_RENEWING_PURCHASE' && BOOST_PRODUCT_IDS.includes(event.product_id ?? '')) {
     if (!event.transaction_id || !event.purchased_at_ms) {
       return jsonResponse({ skipped: 'Missing transaction_id or purchased_at_ms.' }, 200);
     }
