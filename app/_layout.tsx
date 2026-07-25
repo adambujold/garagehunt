@@ -122,6 +122,7 @@ export default function RootLayout() {
           <Stack.Screen name="route-planner" options={{ headerShown: false }} />
           <Stack.Screen name="my-listings" options={{ headerShown: false }} />
           <Stack.Screen name="edit-listing/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="day-of-photos/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="listing-buyers/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="matches-for-you" options={{ headerShown: false }} />
           <Stack.Screen name="settings" options={{ headerShown: false }} />

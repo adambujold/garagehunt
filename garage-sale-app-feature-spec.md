@@ -154,7 +154,17 @@ Extends the review system above rather than replacing it — the self-report "di
 
 ---
 
-## 5. Town-Wide Sale Events (Organizer Flow)
+## 4f. Day-of Photos
+
+Identified as a real, domain-specific gap: pre-listing photos are typically taken whenever the listing is created (often days ahead of the actual sale) and show individual items, not the actual scene — tables set up, everything laid out, the real scale of what's happening. This feature captures the moment that actually creates urgency, distinct from planning photos.
+
+**The prompt:** at the start of each day of a multi-day sale (not just once for the whole listing), the seller gets notified — "Your sale is starting! Snap a fresh photo to bring in more buyers today 📸" — deep-linking to a lightweight add-photos flow (reusing the existing photo upload infrastructure, camera/library on mobile, file picker + HEIC handling on web).
+
+**Kept alongside originals, not replacing them** — day-of photos are additive, tagged distinctly from planning photos, and featured first in the gallery/card thumbnail on any day they exist for, falling back to the original planning photos otherwise. This preserves detail from the original listing while still leading with the freshest, most exciting content.
+
+**"Fresh Photos" badge** — same masking-tape badge system as Hot Listing/Live/Featured, shown on Discover cards and Sale Detail specifically on days a day-of photo has actually been added *today* — not a permanent one-time achievement, since the whole point is real-time freshness, matching the spirit of the existing "Live now" badge.
+
+---
 
 **Who:** Verified/approved Organizers only (community associations, BIAs, street reps — verification process TBD, likely manual review or municipal partnership)
 
@@ -347,7 +357,9 @@ Identified as a gap during the pre-testing polish pass — only a generic native
 1. **Phase 1 — Public, SEO-crawlable browsing, no login required.** General browse/discover page, individual sale detail pages, town-wide event pages. Highest-value starting point on its own, since this is the one piece of "full parity" that specifically can't be replaced by just downloading the app — it's the organic-search discovery layer.
 2. **Phase 2 — Auth + core interactive parity.** Register/login, list a sale, favorite, saved searches/match alerts (email digest as the practical fallback for web push's noted reliability gap).
 3. **Phase 3 — Route planning**, via Mapbox GL JS specifically.
-4. **Phase 4 — Organizer tools**, lowest urgency given smallest user base.
+4. **Phase 4 — Organizer tools**, lowest urgency given smallest user base. **Scope note, decided once Phase 4 investigation started:** self-organized cluster-claiming is deliberately excluded from this phase despite sounding organizer-adjacent — architecturally it's the *inverse* of an organizer tool (claiming a cluster is what *grants* `is_verified_organizer`, not something requiring it already), and it has real unbuilt prerequisites specific to the website (no Profile page exists yet — the only place mobile surfaces the cluster nudge — and cluster detection was correctly left unwired from Phase 2b's List a Sale, since nothing consumed it at the time). Deferred to its own future phase, not bundled in as "one more form."
+
+**Real tracked gap, surfaced by the Phase 4 investigation:** the website has no Profile/account page at all yet — needed eventually for cluster-claiming and likely other future features, worth its own planning pass when prioritized.
 
 **Stack:** Next.js, chosen specifically because it handles both Phase 1's server-rendered/SEO-critical pages and Phase 2+'s fully interactive logged-in app well in one codebase — not just a default choice. Hosted on Vercel (pairs naturally with Next.js), connected to the already-owned `garagehunt.ca` domain. **Shared Supabase backend** — same project, same tables, no new backend service; the website is purely a second frontend.
 

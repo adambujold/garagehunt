@@ -82,6 +82,7 @@
 | description | text | nullable |
 | moderation_status | enum | `clean`, `pending_review`, `rejected` — default `clean`. Set by the Anthropic-based text moderation check at submit time, or forced to `pending_review` regardless of screening result if this is the seller's first-ever listing (account-level trust signal, Section 9 feature spec). A `pending_review` listing still publishes immediately (not blocked, given listings are time-sensitive) — pulled down only if manual review in the Supabase dashboard finds a real problem. |
 | payment_method | enum | `cash_only`, `cash_and_etransfer` — default `cash_only`. Deliberately a simple binary, not a broader multi-select — cash is always implicitly available at a garage sale, this just captures whether e-Transfer is also accepted. Displayed as a badge on the listing card and Sale Detail; not currently a Discover filter. |
+| day_of_photo_reminder_sent_date | date | nullable. The last calendar date a "snap fresh photos" reminder was sent for this listing — a date, not a boolean, since a multi-day sale should get this reminder once per day it's actually open, not just once for the whole listing. Compared against the scheduled job's current date to decide whether today's reminder has already fired. |
 | other_items | text[] | nullable; free-tag entries from the "Other" category input (e.g., "guitar," "vinyl records") — stored as a list, not appended into `description`, so each tag is a discrete match target for the same keyword-matching pipeline used against buyers' `saved_searches.keywords` |
 | event_id | uuid | FK → town_wide_events, nullable |
 | view_count / favorite_count | int | denormalized counters, updated async |
@@ -105,6 +106,7 @@ Join table: `listing_id`, `category_id` — many-to-many.
 | storage_key | string | object storage path |
 | sort_order | int | |
 | moderation_status | enum | pending, approved, rejected |
+| photo_type | enum | `planning` (default, taken when the listing was created) or `day_of` (Section 4f, feature spec) — day-of photos are additive, never replacing planning photos, and are featured first in the gallery/thumbnail on any day at least one exists for. |
 
 ### `organizer_applications`
 *Retroactively documented — built directly during the organizer/events implementation without a docs update at the time.*
@@ -402,3 +404,26 @@ No new backend — reuses the existing `favorites` table and `favorite_count` tr
 **Navigation — a real product decision, not just technical:** desktop/web has no native turn-by-turn equivalent to mobile's "Start Navigation." Decided approach: offer **both** (a) an immediate **"Open in Google Maps"** link using Google's multi-stop directions URL format (`google.com/maps/dir/?api=1&origin=...&destination=...&waypoints=...`), which works as a real link on any device (opens the app directly if installed, browser fallback otherwise), and (b) an **"Email me these directions"** action (reusing the Resend infrastructure from Phase 2d) — solving the real cross-device case of planning on a desktop but actually navigating from a phone later. Not an either/or — both serve genuinely different real moments.
 
 **"Share my route"** — mobile already has this; port the same behavior to web for consistency (already using the `garagehunt://` deep link scheme for mobile shares; web shares should use real `https://garagehunt.ca/...` links instead, not the mobile-only custom scheme).
+
+### Phase 4 (Organizer tools)
+
+**Investigate the actual mobile implementation before designing** — same discipline as Phase 3's Auto-Suggest investigation, given this covers several distinct flows (application form, event creation/management, join-request approval, self-organized cluster claiming) and precise mechanics shouldn't be assumed from memory.
+
+**Scope, mirroring mobile:**
+- Organizer application form (available to any logged-in user, not gated on `is_verified_organizer`) — writes to `organizer_applications`, triggers the existing Resend admin-notification email, no new backend needed.
+- Organizer dashboard (gated on `is_verified_organizer = true`): create a town-wide event, view/manage join requests from sellers, approve/deny requests, view the event's current joined listings.
+- Self-organized cluster claiming — the "neighbors planning sales nearby, team up" flow that lets a regular (non-verified) seller claim and organize a cluster without needing prior organizer status. Worth deciding whether this belongs in Phase 4 or is closely enough related to general seller experience to include regardless of the "verified organizer tools" framing — lean toward including it here since it's part of the same underlying `cluster_suggestions` + event-creation surface.
+
+---
+
+## 10. Day-of Photos
+
+**Cross-platform feature** (mobile + website both need it, since both have full List a Sale / photo upload flows) — not scoped to either platform specifically.
+
+**The one deliberate exception to this project's "derive at query time over cron jobs" principle, and why:** every other notification trigger in this app (matches, Hot Listing tiers, organizer approvals) fires off a genuine database event — something changing. This feature has no event to hook onto: nothing in the database changes when a clock reaches a listing's `daily_start_time`, time simply passes. A lightweight **scheduled job** (Supabase's `pg_cron`, running every 10-15 minutes) checking "which currently-live listings just started today and haven't had a reminder sent yet" is the honest, correct answer here — not a violation of the general principle, just the one category of problem (pure time-based, no data change involved) that actually needs one.
+
+**The check, each run:** for listings where today's date falls within `[start_date, end_date]`, current time has just passed `daily_start_time` (within the job's check window), and `day_of_photo_reminder_sent_date` is not already today's date — send the reminder (push via the existing Expo push infrastructure, email via the existing Resend infrastructure for web-primary users) and set `day_of_photo_reminder_sent_date = current_date`. The date-not-boolean field naturally handles multi-day sales getting a fresh reminder each day without extra logic.
+
+**Reminder deep-links to a lightweight add-photos flow** — reuses the exact existing photo upload infrastructure (camera/library on mobile, file picker + `heic2any` HEIC handling on web), just tagging new uploads `photo_type = 'day_of'` instead of the default `planning`.
+
+**Display logic:** gallery/card thumbnail shows the most recent `day_of` photo if one exists from today, falling back to `planning` photos otherwise — derived at query/render time, no separate "which photo is featured" field needed. The **"📸 Fresh Photos" badge** (same masking-tape system as Hot Listing/Live/Featured) shows specifically when a `day_of` photo exists from *today* — re-derived each day, not a permanent achievement, consistent with the real-time-freshness spirit of the feature.

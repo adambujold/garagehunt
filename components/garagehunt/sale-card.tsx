@@ -68,6 +68,10 @@ export type MockSale = {
   // unremarkable case (no badge shown for it); cash_and_etransfer gets a
   // small badge on the card/detail page since it's the noteworthy option.
   paymentMethod: PaymentMethod;
+  // True when this listing has a day_of photo added *today* (derived at query
+  // time in deriveDisplayPhotos, never stored) — drives the "📸 Fresh Photos"
+  // badge (feature spec 4f). Resets naturally each day since it's re-derived.
+  hasFreshPhotoToday: boolean;
 };
 
 // isNew is only ever set by the Matches for You screen (a listing that
@@ -123,6 +127,7 @@ export function SaleCard({
         </Text>
         <View style={styles.footerRow}>
           <PriceTag label={sale.tagLabel} variant={sale.tagVariant} rotate={-2} />
+          {sale.hasFreshPhotoToday && <PriceTag label="📸 Fresh Photos" variant="fresh" rotate={-2} />}
           {sale.isBoosted && <PriceTag label="⭐ Featured" variant="boosted" rotate={-2} />}
           {sale.eventId !== null && <PriceTag label="Community sale" variant="town" rotate={-2} />}
           {sale.paymentMethod === 'cash_and_etransfer' && (

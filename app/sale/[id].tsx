@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MockSale } from '@/components/garagehunt/sale-card';
 import { PhotoGallery } from '@/components/garagehunt/photo-gallery';
 import { PriceTag } from '@/components/garagehunt/price-tag';
-import { Colors, Fonts } from '@/constants/brand';
+import { Colors, Fonts, PriceTagVariantColors } from '@/constants/brand';
 import { MOCK_SALES } from '@/constants/mock-data';
 import { useAuthSession } from '@/hooks/use-auth-session';
 import { useCurrentLocation } from '@/hooks/use-current-location';
@@ -198,6 +198,10 @@ export default function SaleDetailScreen() {
   const isTownWide = sale.tagVariant === 'town' || sale.eventId !== null;
   const hotTier = deriveHotTier(sale.favoriteCount);
   const isLive = sale.tagVariant === 'live';
+  // The seller viewing their own live listing gets a direct entry into the
+  // day-of add-photos flow — the same screen the scheduled reminder deep-links
+  // to, just reachable without waiting for the push.
+  const isOwner = !isMockListing && !!session && session.user.id === sale.sellerId;
   const withinCheckInRange = Boolean(
     coords && isWithinCheckInRange(coords, { latitude: sale.latitude, longitude: sale.longitude })
   );
@@ -236,6 +240,7 @@ export default function SaleDetailScreen() {
 
         <View style={styles.tagRow}>
           <PriceTag label={sale.tagLabel} variant={sale.tagVariant} rotate={-2} />
+          {sale.hasFreshPhotoToday && <PriceTag label="📸 Fresh Photos" variant="fresh" rotate={-2} />}
           {hotTier && <PriceTag label={HOT_TIER_LABELS[hotTier]} variant={hotTier} rotate={-3} />}
           {sale.paymentMethod === 'cash_and_etransfer' && (
             <PriceTag label="💸 Cash + e-Transfer" variant="etransfer" rotate={-2} />
@@ -292,6 +297,15 @@ export default function SaleDetailScreen() {
             <Ionicons name="checkmark-circle" size={14} color={Colors.jade} />
             <Text style={styles.checkedInText}>You&apos;re checked in</Text>
           </View>
+        )}
+
+        {isOwner && isLive && (
+          <Pressable
+            style={styles.dayOfPhotosButton}
+            onPress={() => router.push({ pathname: '/day-of-photos/[id]', params: { id: sale.id } })}>
+            <Ionicons name="camera" size={14} color="#fff" />
+            <Text style={styles.dayOfPhotosButtonLabel}>Add today&apos;s photos</Text>
+          </Pressable>
         )}
 
         <Text style={styles.description}>{sale.description}</Text>
@@ -458,6 +472,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     marginBottom: 14,
+  },
+  dayOfPhotosButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    // The "fresh" cyan, tying this action to the "📸 Fresh Photos" badge it
+    // produces.
+    backgroundColor: PriceTagVariantColors.fresh,
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginBottom: 14,
+  },
+  dayOfPhotosButtonLabel: {
+    fontFamily: Fonts.displaySemiBold,
+    fontSize: 13,
+    color: '#fff',
   },
   checkedInText: {
     fontFamily: Fonts.bodyMedium,

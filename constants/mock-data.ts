@@ -27,6 +27,7 @@ export const MOCK_SALES: MockSale[] = [
     checkinCount: 0,
     isBoosted: false,
     paymentMethod: 'cash_only',
+    hasFreshPhotoToday: false,
   },
   {
     id: '2',
@@ -54,6 +55,7 @@ export const MOCK_SALES: MockSale[] = [
     checkinCount: 0,
     isBoosted: false,
     paymentMethod: 'cash_only',
+    hasFreshPhotoToday: false,
   },
   {
     id: '3',
@@ -81,6 +83,7 @@ export const MOCK_SALES: MockSale[] = [
     checkinCount: 0,
     isBoosted: false,
     paymentMethod: 'cash_only',
+    hasFreshPhotoToday: false,
   },
   {
     id: '4',
@@ -108,6 +111,7 @@ export const MOCK_SALES: MockSale[] = [
     checkinCount: 0,
     isBoosted: false,
     paymentMethod: 'cash_only',
+    hasFreshPhotoToday: false,
   },
   {
     id: '5',
@@ -135,6 +139,7 @@ export const MOCK_SALES: MockSale[] = [
     checkinCount: 0,
     isBoosted: false,
     paymentMethod: 'cash_only',
+    hasFreshPhotoToday: false,
   },
   {
     id: '6',
@@ -162,5 +167,6 @@ export const MOCK_SALES: MockSale[] = [
     checkinCount: 0,
     isBoosted: false,
     paymentMethod: 'cash_only',
+    hasFreshPhotoToday: false,
   },
 ];

@@ -74,7 +74,8 @@ export type PriceTagVariant =
   | 'infernoHot'
   | 'organizer'
   | 'boosted'
-  | 'etransfer';
+  | 'etransfer'
+  | 'fresh';
 
 export const PriceTagVariantColors: Record<PriceTagVariant, string> = {
   live: Colors.jade,
@@ -100,6 +101,10 @@ export const PriceTagVariantColors: Record<PriceTagVariant, string> = {
   // here since the label text itself ("💸 Cash + e-Transfer" vs "Live now")
   // is what actually disambiguates them, not the accent color alone.
   etransfer: Colors.jade,
+  // "📸 Fresh Photos" (feature spec 4f) — a bright cyan, its own hue distinct
+  // from the adjacent "Live now" jade and from every other badge, so
+  // real-time freshness reads as a clearly separate signal at a glance.
+  fresh: '#1CA9C9',
 };
 
 // Three-tier "Hot listing" progression (feature spec Section 4d: "once a

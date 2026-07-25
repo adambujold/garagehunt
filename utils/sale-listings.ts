@@ -4,7 +4,7 @@ import { Coordinates } from '@/hooks/use-current-location';
 import { detectClusterForListing } from '@/utils/cluster-suggestions';
 import { formatSaleSchedule } from '@/utils/format-sale-schedule';
 import { BOOST_DURATION_HOURS, deriveIsBoosted } from '@/utils/listing-boost';
-import { getListingPhotoUrl } from '@/utils/listing-photos';
+import { deriveDisplayPhotos, DisplayPhotoRow } from '@/utils/listing-photos';
 import { moderateListingText } from '@/utils/moderation';
 import { formatTimeOfDay } from '@/utils/parse-sale-form-input';
 import { fetchSellerRatings } from '@/utils/reviews';
@@ -68,7 +68,7 @@ export type DbSaleListingRow = {
   boost_expires_at: string | null;
   payment_method: PaymentMethod;
   listing_categories: { categories: { name: string } | null }[] | null;
-  listing_photos: { storage_key: string; sort_order: number }[] | null;
+  listing_photos: DisplayPhotoRow[] | null;
 };
 
 export const LISTING_SELECT = `
@@ -76,14 +76,9 @@ export const LISTING_SELECT = `
   daily_start_time, daily_end_time, status, title, description, other_items,
   favorite_count, checkin_count, event_id, is_boosted, boost_expires_at,
   payment_method,
-  listing_categories(categories(name)), listing_photos(storage_key, sort_order)
+  listing_categories(categories(name)),
+  listing_photos(storage_key, sort_order, photo_type, created_at)
 `;
-
-function sortedPhotoUrls(photos: { storage_key: string; sort_order: number }[] | null): string[] {
-  return [...(photos ?? [])]
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map((photo) => getListingPhotoUrl(photo.storage_key));
-}
 
 function displayStatusToTag(status: DisplayStatus): { tagLabel: string; tagVariant: PriceTagVariant } {
   switch (status) {
@@ -126,6 +121,7 @@ export function mapRowToSaleView(row: DbSaleListingRow, origin: Coordinates | nu
   const distanceKm = origin
     ? Math.round(haversineDistanceKm(origin, { latitude: row.latitude, longitude: row.longitude }) * 10) / 10
     : 0;
+  const displayPhotos = deriveDisplayPhotos(row.listing_photos);
 
   return {
     id: row.id,
@@ -150,7 +146,10 @@ export function mapRowToSaleView(row: DbSaleListingRow, origin: Coordinates | nu
     eventId: row.event_id,
     isBoosted: deriveIsBoosted(row.is_boosted, row.boost_expires_at),
     paymentMethod: row.payment_method,
-    photos: sortedPhotoUrls(row.listing_photos),
+    photos: displayPhotos.urls,
+    // Drives the "📸 Fresh Photos" badge — true only when a day_of photo was
+    // added today (feature spec 4f). Re-derived every render, never stored.
+    hasFreshPhotoToday: displayPhotos.hasFreshPhotoToday,
     // Filled in by attachSellerRatings below — mapRowToSaleView itself has
     // no seller-rating data to work with (that lives in public.users, a
     // separate table, fetched in one batched call rather than embedded here
@@ -443,14 +442,14 @@ type DbMyListingRow = {
   checkin_count: number;
   is_boosted: boolean;
   boost_expires_at: string | null;
-  listing_photos: { storage_key: string; sort_order: number }[] | null;
+  listing_photos: DisplayPhotoRow[] | null;
 };
 
 export async function fetchMyListings(sellerId: string): Promise<MyListingSummary[]> {
   const { data, error } = await supabase
     .from('sale_listings')
     .select(
-      'id, address_text, start_date, end_date, daily_start_time, daily_end_time, status, title, view_count, favorite_count, checkin_count, is_boosted, boost_expires_at, listing_photos(storage_key, sort_order)'
+      'id, address_text, start_date, end_date, daily_start_time, daily_end_time, status, title, view_count, favorite_count, checkin_count, is_boosted, boost_expires_at, listing_photos(storage_key, sort_order, photo_type, created_at)'
     )
     .eq('seller_id', sellerId)
     .order('created_at', { ascending: false });
@@ -459,7 +458,9 @@ export async function fetchMyListings(sellerId: string): Promise<MyListingSummar
 
   return ((data ?? []) as DbMyListingRow[]).map((row) => {
     const { tagLabel, tagVariant } = statusToTag(row.status, row.start_date, row.end_date);
-    const photoUrls = sortedPhotoUrls(row.listing_photos);
+    // My Listings thumbnail leads with today's fresh photo too, same rule as
+    // Discover/Detail — a seller sees their listing the way buyers do.
+    const photoUrls = deriveDisplayPhotos(row.listing_photos).urls;
     return {
       id: row.id,
       title: row.title ?? deriveTitle(row.address_text),

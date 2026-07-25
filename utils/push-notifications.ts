@@ -61,6 +61,14 @@ export async function registerForPushNotificationsAsync(userId: string): Promise
       name: 'Hot Listing alerts',
       importance: Notifications.AndroidImportance.HIGH,
     });
+    // Seller-facing day-of "snap fresh photos" reminder — a distinct channel
+    // for the same locked-importance reason as the two above.
+    // send-day-of-photos-reminder's Edge Function sets channelId to match
+    // this exactly.
+    await Notifications.setNotificationChannelAsync('day-of-photo-alerts', {
+      name: 'Day-of photo reminders',
+      importance: Notifications.AndroidImportance.HIGH,
+    });
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();

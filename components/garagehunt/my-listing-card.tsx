@@ -102,6 +102,18 @@ export function MyListingCard({
           <Ionicons name="chevron-forward" size={13} color={Colors.tanBorder} />
         </Pressable>
       )}
+      {/* Live listing → direct entry into the day-of add-photos flow, the same
+          screen the scheduled reminder deep-links to, reachable without
+          waiting for the push. Only meaningful while the sale is actually on. */}
+      {listing.tagVariant === 'live' && (
+        <Pressable
+          style={styles.buyersButton}
+          onPress={() => router.push({ pathname: '/day-of-photos/[id]', params: { id: listing.id } })}>
+          <Ionicons name="camera-outline" size={13} color={Colors.mutedDark} />
+          <Text style={styles.buyersButtonLabel}>Add today&apos;s photos</Text>
+          <Ionicons name="chevron-forward" size={13} color={Colors.tanBorder} />
+        </Pressable>
+      )}
     </View>
   );
 }

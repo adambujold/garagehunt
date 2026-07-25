@@ -12,6 +12,11 @@ import { supabase } from '@/utils/supabase';
 const PHOTO_BUCKET = 'listing-photos';
 export const MAX_LISTING_PHOTOS = 10;
 
+// listing_photos.photo_type (0036_day_of_photos.sql). 'planning' is the
+// default for every normal List a Sale / Edit Listing upload; 'day_of' is
+// tagged only by the day-of add-photos flow (app/day-of-photos/[id].tsx).
+export type PhotoType = 'planning' | 'day_of';
+
 export type ListingPhoto = {
   id: string;
   storageKey: string;
@@ -53,12 +58,67 @@ export function getListingPhotoUrl(storageKey: string): string {
   return supabase.storage.from(PHOTO_BUCKET).getPublicUrl(storageKey).data.publicUrl;
 }
 
-export async function fetchListingPhotos(listingId: string): Promise<ListingPhoto[]> {
-  const { data, error } = await supabase
+// A listing_photos row as embedded in a sale query — just the fields needed
+// to decide display order (see deriveDisplayPhotos). created_at is an ISO
+// timestamptz string.
+export type DisplayPhotoRow = {
+  storage_key: string;
+  sort_order: number;
+  photo_type: PhotoType;
+  created_at: string;
+};
+
+// Naive-local "is this timestamp today?" — matches deriveDisplayStatus's
+// device-local date handling in utils/sale-listings.ts (the app has no
+// per-listing timezone; see 0037_day_of_photo_reminders_cron.sql's header for
+// the same limitation on the send side).
+function isToday(iso: string, now: Date = new Date()): boolean {
+  const d = new Date(iso);
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
+// Day-of Photos display rule (feature spec 4f / tech arch Section 10),
+// derived at render time — no stored "primary photo" flag. Any day_of photo
+// added *today* leads the gallery/thumbnail (most recent first); everything
+// else (planning photos, plus day_of photos from earlier days of a multi-day
+// sale, which are kept, never replaced) follows in sort_order. When no day_of
+// photo exists from today, this is exactly the old behavior: all photos in
+// sort_order. hasFreshPhotoToday drives the "📸 Fresh Photos" badge.
+export function deriveDisplayPhotos(
+  photos: DisplayPhotoRow[] | null,
+  now: Date = new Date()
+): { urls: string[]; hasFreshPhotoToday: boolean } {
+  const all = photos ?? [];
+  const freshToday = all
+    .filter((p) => p.photo_type === 'day_of' && isToday(p.created_at, now))
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const freshKeys = new Set(freshToday.map((p) => p.storage_key));
+  const rest = all
+    .filter((p) => !freshKeys.has(p.storage_key))
+    .sort((a, b) => a.sort_order - b.sort_order);
+
+  return {
+    urls: [...freshToday, ...rest].map((p) => getListingPhotoUrl(p.storage_key)),
+    hasFreshPhotoToday: freshToday.length > 0,
+  };
+}
+
+export async function fetchListingPhotos(
+  listingId: string,
+  photoType?: PhotoType
+): Promise<ListingPhoto[]> {
+  let query = supabase
     .from('listing_photos')
     .select('id, storage_key, sort_order')
-    .eq('listing_id', listingId)
-    .order('sort_order', { ascending: true });
+    .eq('listing_id', listingId);
+  // Optional filter — the day-of add-photos screen fetches only 'day_of'
+  // photos; every other caller passes nothing and gets all of them.
+  if (photoType) query = query.eq('photo_type', photoType);
+  const { data, error } = await query.order('sort_order', { ascending: true });
 
   if (error) throw error;
 
@@ -75,7 +135,12 @@ export async function fetchListingPhotos(listingId: string): Promise<ListingPhot
 // records it in listing_photos. The storage path's first segment is what
 // the bucket's RLS policies match against sale_listings.seller_id, so a
 // photo can only ever land under a listing the uploader owns.
-export async function uploadListingPhoto(listingId: string, localUri: string, sortOrder: number): Promise<ListingPhoto> {
+export async function uploadListingPhoto(
+  listingId: string,
+  localUri: string,
+  sortOrder: number,
+  photoType: PhotoType = 'planning'
+): Promise<ListingPhoto> {
   const { uri, extension } = await normalizeToJpegIfHeic(localUri, inferExtension(localUri));
   const contentType = inferContentType(extension);
   const randomName = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}.${extension}`;
@@ -133,7 +198,13 @@ export async function uploadListingPhoto(listingId: string, localUri: string, so
 
   const { data, error: insertError } = await supabase
     .from('listing_photos')
-    .insert({ listing_id: listingId, storage_key: storageKey, sort_order: sortOrder, moderation_status: moderationStatus })
+    .insert({
+      listing_id: listingId,
+      storage_key: storageKey,
+      sort_order: sortOrder,
+      moderation_status: moderationStatus,
+      photo_type: photoType,
+    })
     .select('id, storage_key, sort_order')
     .single();
 
