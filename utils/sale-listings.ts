@@ -3,7 +3,9 @@ import { PriceTagVariant } from '@/constants/brand';
 import { Coordinates } from '@/hooks/use-current-location';
 import { detectClusterForListing } from '@/utils/cluster-suggestions';
 import { formatSaleSchedule } from '@/utils/format-sale-schedule';
-import { BOOST_DURATION_HOURS, deriveIsBoosted } from '@/utils/listing-boost';
+// BOOST_DURATION_HOURS is no longer imported here — the 48h expiry is now
+// computed inside apply_listing_boost() (0040) so the client can't choose it.
+import { deriveIsBoosted } from '@/utils/listing-boost';
 import { deriveDisplayPhotos, DisplayPhotoRow } from '@/utils/listing-photos';
 import { moderateListingText } from '@/utils/moderation';
 import { formatTimeOfDay } from '@/utils/parse-sale-form-input';
@@ -622,28 +624,33 @@ export async function cancelSaleListing(id: string): Promise<void> {
   if (error) throw error;
 }
 
-// Applies a boost purchase to a specific listing — called immediately
-// after utils/purchases.ts's purchaseBoost() resolves successfully. See
-// supabase/migrations/0022_listing_boost.sql's header comment for why this
-// is a direct client-side write rather than something the RevenueCat
-// webhook triggers: the existing "Sellers can update their own listings"
-// RLS policy is what makes this safe (a client-only) approach — the update
-// simply fails to match any row if the caller isn't that listing's seller.
-// Always sets a fresh now()+48h expiry regardless of any existing boost —
-// per feature spec Section 10, re-boosting an already-boosted listing
-// extends/restarts the window rather than stacking or erroring.
+// Applies a boost purchase to a specific listing — called immediately after
+// utils/purchases.ts's purchaseBoost() resolves successfully.
+//
+// This used to write is_boosted directly, which meant nothing verified a
+// purchase had actually happened; 0022's header called that out as a known
+// tradeoff. As of 0040_lock_privileged_listing_columns.sql those columns are
+// no longer client-writable, and this goes through an RPC that consumes one
+// webhook-logged row from boost_purchases — so a boost now requires a real,
+// server-verified purchase, while the client still gets to choose which
+// listing (the thing RevenueCat couldn't carry on its own).
+//
+// Still a fresh now()+48h each time, per feature spec Section 10: re-boosting
+// an already-boosted listing restarts the window rather than stacking.
 export async function applyListingBoost(listingId: string): Promise<string> {
-  const expiresAt = new Date(Date.now() + BOOST_DURATION_HOURS * 60 * 60 * 1000).toISOString();
-  const { data, error } = await supabase
-    .from('sale_listings')
-    .update({ is_boosted: true, boost_expires_at: expiresAt })
-    .eq('id', listingId)
-    .select('boost_expires_at')
-    .single();
-  // .single() throws its own PostgrestError if zero rows matched (e.g. the
-  // RLS check failed because this isn't actually the caller's listing) —
-  // surfacing that as a real error here matters more than for a typical
-  // update, since the user already paid for this to take effect.
-  if (error) throw error;
-  return data.boost_expires_at;
+  const { data, error } = await supabase.rpc('apply_listing_boost', { p_listing_id: listingId });
+
+  if (error) {
+    // P0002 = the purchase wasn't found. Usually a race: RevenueCat's webhook
+    // fires within seconds of the purchase but it IS asynchronous, so a fast
+    // tap can arrive first. Say something the seller can act on instead of a
+    // raw Postgres error, since they've just paid.
+    if (error.code === 'P0002') {
+      throw new Error(
+        "We couldn't confirm your purchase just yet — it can take a few seconds to register. Please try again in a moment; you won't be charged twice."
+      );
+    }
+    throw error;
+  }
+  return data as string;
 }

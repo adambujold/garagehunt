@@ -16,6 +16,26 @@ const config: ExpoConfig = {
   scheme: 'garagehunt',
   userInterfaceStyle: 'automatic',
   newArchEnabled: true,
+  // EAS Update (expo-updates). Added because there was previously NO way to
+  // get a JS-only fix onto an installed build — every change, however small,
+  // needed a full native build, which costs real money and is why fixes sat
+  // queued. With this, JS/asset changes ship via `eas update` instead.
+  //
+  // The URL is this project's EAS endpoint; the id matches extra.eas.projectId
+  // below.
+  updates: {
+    url: 'https://u.expo.dev/4f872093-e02b-4006-b034-3b46ab6a8a3c',
+  },
+  // 'fingerprint', not 'appVersion': the fingerprint is computed from the
+  // project's native dependencies, so an update is only ever served to a
+  // binary whose native code actually matches it. That makes the dangerous
+  // case impossible by construction — pushing JS that expects a native module
+  // the installed build doesn't have. The tradeoff is that adding or removing
+  // any native dependency changes the fingerprint and requires a new build,
+  // which is the correct outcome rather than an inconvenience.
+  runtimeVersion: {
+    policy: 'fingerprint',
+  },
   ios: {
     supportsTablet: true,
     // Required for eas build — the CLI can't write this into a dynamic
