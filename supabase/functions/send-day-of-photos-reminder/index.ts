@@ -30,7 +30,10 @@ type TriggerPayload = {
 };
 
 const PUSH_TITLE = 'Your sale is starting! 📸';
-const PUSH_BODY = 'Snap a fresh photo to bring in more buyers today.';
+// "photos of your setup" rather than "a photo" — the whole point of this
+// feature is the real scene (tables out, everything laid out), which is what
+// planning photos of individual items can't show.
+const PUSH_BODY = 'Snap some fresh photos of your setup to bring more buyers in today.';
 // Web deep link for the email — the app's garagehunt:// scheme only resolves
 // on a device with the app installed, whereas an email is most likely opened
 // on desktop/web, so this points at the companion website's equivalent route.
@@ -72,8 +75,8 @@ async function sendReminderEmail(
           <h2 style="margin: 0 0 12px;">Your sale is starting! 📸</h2>
           <p style="margin: 0 0 16px;">
             Buyers love seeing the real scene — tables set up, everything laid out.
-            Snap a fresh photo of <strong>${listingTitle}</strong> now to bring in more
-            buyers today. It's added right alongside your original photos, and gets a
+            Snap some fresh photos of your setup at <strong>${listingTitle}</strong> to bring
+            more buyers in today. They're added right alongside your original photos, and get a
             <strong>📸 Fresh Photos</strong> badge on your listing for the rest of the day.
           </p>
           <p style="margin: 0 0 24px;">

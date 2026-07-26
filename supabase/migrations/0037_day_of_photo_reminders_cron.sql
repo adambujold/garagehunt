@@ -35,13 +35,33 @@
 -- 0036 and this file together and a failure here silently reverts 0036's
 -- columns too (observed exactly that way once already).
 --
+-- THE AUTH KEY — deliberately NOT a placeholder in this file. 0019/0026/0028/
+-- 0030 all embed a <SERVICE_ROLE_KEY> placeholder that the operator is meant
+-- to swap in the SQL Editor, and that has now silently failed twice in
+-- practice (0028 shipped with the literal placeholder text; so did the first
+-- run of this job — every call came back 401
+-- UNAUTHORIZED_INVALID_JWT_FORMAT, and because the http_post below is wrapped
+-- in an exception handler, the cron job still reported "succeeded" while no
+-- reminder was ever delivered).
+--
+-- So the key lives in Supabase Vault under the name 'service_role_key' and is
+-- read by name at call time. Nothing secret is in this file, there is no
+-- placeholder to forget, and the one-time key entry is its own tiny statement
+-- (see PREREQUISITE 2) instead of one line buried in a long block.
+--
+-- PREREQUISITE 1 — deploy the Edge Function
+-- (supabase/functions/send-day-of-photos-reminder) first, or the early runs
+-- will just log a warning and no-op.
+--
+-- PREREQUISITE 2 — store the key ONCE (run this by itself, replacing only the
+-- first argument with the real service_role secret from Project Settings ->
+-- API Keys):
+--
+--   create extension if not exists supabase_vault;
+--   delete from vault.secrets where name = 'service_role_key';
+--   select vault.create_secret('<paste-the-key-here>', 'service_role_key');
+--
 -- HOW TO RUN THIS: paste into the Supabase Dashboard's SQL Editor and run.
--- Before running, replace <SERVICE_ROLE_KEY> below with the real service_role
--- secret (Project Settings -> API) — paste it directly into the SQL Editor
--- box, exactly like 0019/0026/0028/0030 did, so the real key never lands in
--- this committed file. Deploy the send-day-of-photos-reminder Edge Function
--- (supabase/functions/send-day-of-photos-reminder) before scheduling this, or
--- the first runs will just log a warning and no-op.
 
 -- Creates the `cron` schema and its cron.job table. Safe to re-run, and safe
 -- if it was already enabled via Database -> Extensions.
@@ -62,7 +82,19 @@ declare
   now_local  timestamp := timezone('America/Toronto', now());
   today_local date     := (timezone('America/Toronto', now()))::date;
   rec record;
+  auth_key text;
 begin
+  -- Read the key by name rather than embedding it (see header). If it's
+  -- missing, fail loudly instead of firing off doomed 401s that the exception
+  -- handler below would swallow into a green "succeeded" cron run.
+  select decrypted_secret into auth_key
+  from vault.decrypted_secrets
+  where name = 'service_role_key';
+
+  if auth_key is null or auth_key = '' then
+    raise exception 'send_day_of_photo_reminders: vault secret ''service_role_key'' is missing — see this migration''s PREREQUISITE 2';
+  end if;
+
   -- Claim-then-notify: the UPDATE stamps day_of_photo_reminder_sent_date =
   -- today FIRST (inside a data-modifying CTE) and only the rows it actually
   -- claimed come back via RETURNING. That makes the "once per day" guard
@@ -104,7 +136,7 @@ begin
         url := 'https://musrnxyygnqzbbpkuqip.supabase.co/functions/v1/send-day-of-photos-reminder',
         headers := jsonb_build_object(
           'Content-Type', 'application/json',
-          'Authorization', 'Bearer <SERVICE_ROLE_KEY>'
+          'Authorization', 'Bearer ' || auth_key
         ),
         body := jsonb_build_object(
           'listing_id', rec.id,
