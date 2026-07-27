@@ -7,7 +7,10 @@ import { formatSaleSchedule } from '@/utils/format-sale-schedule';
 // computed inside apply_listing_boost() (0040) so the client can't choose it.
 import { deriveIsBoosted } from '@/utils/listing-boost';
 import { deriveDisplayPhotos, DisplayPhotoRow } from '@/utils/listing-photos';
-import { moderateListingText } from '@/utils/moderation';
+// moderateListingText is no longer called from here — text screening moved
+// inside the publish-listing Edge Function (0041), where the client can't
+// skip it. utils/moderation.ts keeps the wrapper for moderateListingPhoto,
+// which is still called at upload time.
 import { formatTimeOfDay } from '@/utils/parse-sale-form-input';
 import { fetchSellerRatings } from '@/utils/reviews';
 import { supabase } from '@/utils/supabase';
@@ -329,7 +332,13 @@ export async function createSaleListing(input: CreateSaleListingInput): Promise<
 
 export type PublishSaleListingInput = {
   id: string;
-  description: string;
+  /**
+   * Retained so callers don't all need changing, but no longer sent anywhere:
+   * the publish-listing Edge Function reads the description from the database
+   * itself. Passing it would let a caller submit different text for screening
+   * than the row actually holds.
+   */
+  description?: string;
 };
 
 // The gate a draft listing must pass to become published (feature spec
@@ -339,65 +348,41 @@ export type PublishSaleListingInput = {
 // Throwing here leaves the listing as-is (still draft, any field edits
 // already saved by the caller) — only the status transition itself is
 // blocked, not the seller's other changes.
+// Every check that used to live here — the photo gate, the text moderation
+// call, the first-listing trust signal, and the status/moderation_status write
+// — now runs inside the publish-listing Edge Function. It was all advisory
+// while it lived on the client: nothing stopped a seller writing
+// status='published', moderation_status='clean' directly and skipping review
+// entirely. As of 0041_server_side_publish_gate.sql the database rejects that
+// transition outright, so this function is the only way through.
+//
+// Throwing here still leaves the listing exactly as it was (a draft, with any
+// field edits the caller already saved) — only the transition is blocked.
 export async function publishSaleListing(input: PublishSaleListingInput): Promise<void> {
-  const { data: listingRow, error: fetchError } = await supabase
-    .from('sale_listings')
-    .select('seller_id')
-    .eq('id', input.id)
-    .single();
-  if (fetchError) throw fetchError;
+  const { data, error } = await supabase.functions.invoke('publish-listing', {
+    body: { listing_id: input.id },
+  });
 
-  // Photo approval gate — a listing can't publish until every photo is
-  // approved, or there are zero photos. Photos land as 'approved' or
-  // 'pending' at upload time (see uploadListingPhoto) — 'rejected' is only
-  // ever set by a human via Table Editor, but is included here too in case
-  // a reviewer rejects a photo on an already-published listing's later
-  // resubmission.
-  const { data: photos, error: photosError } = await supabase
-    .from('listing_photos')
-    .select('moderation_status')
-    .eq('listing_id', input.id);
-  if (photosError) throw photosError;
-  if ((photos ?? []).some((photo) => photo.moderation_status !== 'approved')) {
-    throw new Error(
-      "One or more of your photos was flagged for manual review and can't be auto-approved — publishing again won't change that. Your listing has been saved as a draft; remove/replace the flagged photo, or wait for it to be manually approved."
-    );
+  if (error) {
+    // functions.invoke surfaces a non-2xx as a FunctionsHttpError whose body
+    // holds our own message — dig it out, since that text (a rejected
+    // description's reason, or the flagged-photo explanation) is written for
+    // the seller to read.
+    let message = 'Something went wrong publishing your listing.';
+    try {
+      const body = await (error as { context?: Response }).context?.json();
+      if (body?.error) message = body.error as string;
+    } catch {
+      // Fall through to the generic message — the invoke failed at a level
+      // below our function (network, gateway), so there's no body to read.
+    }
+    throw new Error(message);
   }
+  if (data?.error) throw new Error(data.error as string);
 
-  // Text moderation — clearly bad content blocks publishing synchronously;
-  // borderline content publishes but gets flagged.
-  const textResult = await moderateListingText(input.description);
-  if (textResult.decision === 'reject') {
-    throw new Error(textResult.reason || 'Your listing description needs to be revised before publishing.');
-  }
-
-  // New-account trust signal — a seller's first-ever published listing is
-  // always flagged for manual review regardless of what screening found,
-  // an extra caution layer for unproven accounts. Counts PUBLISHED listings
-  // only (not drafts) — an account with several abandoned drafts but zero
-  // real listings still counts as unproven.
-  const { count: publishedCount, error: countError } = await supabase
-    .from('sale_listings')
-    .select('id', { count: 'exact', head: true })
-    .eq('seller_id', listingRow.seller_id)
-    .eq('status', 'published');
-  if (countError) throw countError;
-  const isFirstListing = (publishedCount ?? 0) === 0;
-
-  const moderationStatus: 'clean' | 'pending_review' =
-    isFirstListing || textResult.decision === 'flag' ? 'pending_review' : 'clean';
-
-  // Match computation used to happen here client-side (computeAndInsertMatches)
-  // — moved server-side as of supabase/migrations/0035_server_side_match_computation.sql,
-  // a trigger on sale_listings_raw that fires on this exact status update
-  // regardless of which client performed it, so it no longer needs to be
-  // called from here (or from the website's equivalent publish flow).
-  const { error: publishError } = await supabase
-    .from('sale_listings')
-    .update({ status: 'published', moderation_status: moderationStatus })
-    .eq('id', input.id);
-  if (publishError) throw publishError;
-
+  // Match computation happens server-side on the status change itself (see
+  // 0035_server_side_match_computation.sql), so it needs nothing here. Cluster
+  // detection is still client-side and best-effort.
   try {
     await detectClusterForListing(input.id);
   } catch (err) {
