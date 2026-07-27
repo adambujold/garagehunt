@@ -368,13 +368,23 @@ export async function publishSaleListing(input: PublishSaleListingInput): Promis
     // holds our own message — dig it out, since that text (a rejected
     // description's reason, or the flagged-photo explanation) is written for
     // the seller to read.
-    let message = 'Something went wrong publishing your listing.';
+    const response = (error as { context?: Response }).context;
+    let message: string | null = null;
     try {
-      const body = await (error as { context?: Response }).context?.json();
+      const body = await response?.json();
       if (body?.error) message = body.error as string;
     } catch {
-      // Fall through to the generic message — the invoke failed at a level
-      // below our function (network, gateway), so there's no body to read.
+      // No JSON body — the failure happened below our function (gateway,
+      // network), so fall through to the status-based messages below.
+    }
+    if (!message) {
+      // A 404 here means the Edge Function isn't deployed. That was previously
+      // reported as a generic "something went wrong", which sent a real
+      // debugging session looking in the wrong place — name it explicitly.
+      message =
+        response?.status === 404
+          ? "Publishing isn't available right now — the publish-listing function isn't deployed. (If you're the developer: deploy supabase/functions/publish-listing.)"
+          : `Something went wrong publishing your listing${response?.status ? ` (error ${response.status})` : ''}.`;
     }
     throw new Error(message);
   }
