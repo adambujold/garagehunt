@@ -1,7 +1,10 @@
 import { File } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 
-import { moderateListingPhoto } from '@/utils/moderation';
+// moderateListingPhoto is no longer called from here — the Edge Function now
+// classifies, stores, and records the photo in one operation, so there is no
+// verdict for this layer to receive (0042). utils/moderation.ts keeps the
+// wrapper only for its timeout/fail-safe helpers used elsewhere.
 import { supabase } from '@/utils/supabase';
 
 // Mirrors listing_photos from supabase/migrations/0001_sale_listings_schema.sql
@@ -135,6 +138,13 @@ export async function fetchListingPhotos(
 // records it in listing_photos. The storage path's first segment is what
 // the bucket's RLS policies match against sale_listings.seller_id, so a
 // photo can only ever land under a listing the uploader owns.
+// The client's job is now just "read the picked file and hand it over". The
+// moderate-listing-photo Edge Function classifies it, stores it, and records
+// it in one server-side operation — see that function's header, and
+// 0042_server_side_photo_moderation.sql, for why: this code used to receive a
+// verdict and then write the row itself, which meant it could simply ignore
+// the verdict and insert 'approved'. Clients no longer hold INSERT on
+// listing_photos or on the bucket at all.
 export async function uploadListingPhoto(
   listingId: string,
   localUri: string,
@@ -143,83 +153,60 @@ export async function uploadListingPhoto(
 ): Promise<ListingPhoto> {
   const { uri, extension } = await normalizeToJpegIfHeic(localUri, inferExtension(localUri));
   const contentType = inferContentType(extension);
-  const randomName = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}.${extension}`;
-  const storageKey = `${listingId}/${randomName}`;
 
-  // fetch(uri).blob() is unreliable for local file:// URIs on native iOS/
-  // Android (works fine in a browser, but can silently produce a
-  // corrupt/empty upload on-device) — expo-file-system's File.arrayBuffer()
-  // reads the raw bytes directly and works identically on web and native.
-  const arrayBuffer = await new File(uri).arrayBuffer();
-
-  // File.arrayBuffer() has been observed to silently resolve with a tiny
-  // placeholder (e.g. a ~70-byte 1x1 PNG) instead of throwing when it can't
-  // actually read the picked URI — a real photo is always well over this.
-  // Uploading that "succeeds" and leaves the listing with a photo that
-  // decodes fine but renders as a single stretched-out color block, which is
-  // worse than no photo at all (PhotoGallery's normal empty-state icon).
-  // Catching it here turns a silent corruption into a visible retryable
-  // error via the existing photoError banner on List a Sale / Edit Listing.
-  if (arrayBuffer.byteLength < 1000) {
-    throw new Error('That photo could not be read. Please try again.');
-  }
-
-  // Classified before anything touches Storage — a rejected photo is never
-  // uploaded at all, not uploaded-then-deleted. Read as base64 separately
-  // from the arrayBuffer above (a second local read, not a second network
-  // round trip) since that's the format Claude's vision API takes.
+  // Read as base64 — the format both Claude's vision API and the function's
+  // upload path take. fetch(uri).blob() is unreliable for local file:// URIs
+  // on native (works in a browser, but can silently produce corrupt bytes
+  // on-device); expo-file-system reads them directly.
   const imageBase64 = await new File(uri).base64();
 
-  // Same silent-corruption failure mode as arrayBuffer above, just never
-  // guarded on this second, independent read — confirmed as a real bug via
-  // Anthropic's API consistently rejecting one specific photo with
-  // "Could not process image" regardless of which model was asked, which
-  // only makes sense if the bytes reaching it were never a valid image to
-  // begin with. A real photo's base64 is always many times this size.
+  // A read that silently yields a tiny placeholder instead of throwing is a
+  // real, observed failure mode — Anthropic consistently rejected one specific
+  // photo with "Could not process image", which only makes sense if the bytes
+  // were never a valid image. A real photo's base64 is many times this size.
+  // Caught here so it surfaces as a retryable error in the photoError banner
+  // rather than as a confusing server-side failure.
   if (imageBase64.length < 1000) {
     throw new Error('That photo could not be read. Please try again.');
   }
 
-  const decision = await moderateListingPhoto(imageBase64, contentType);
-  if (decision === 'reject') {
-    throw new Error("That photo doesn't meet our content guidelines. Please choose a different photo.");
-  }
-
-  const { error: uploadError } = await supabase.storage.from(PHOTO_BUCKET).upload(storageKey, arrayBuffer, {
-    contentType,
-  });
-  if (uploadError) throw uploadError;
-
-  // 'flag' maps to the schema's existing 'pending' value (awaiting manual
-  // review); 'approve' maps to 'approved'. Explicit either way, rather than
-  // relying on the column's 'pending' default, so this stays correct if
-  // that default ever changes.
-  const moderationStatus = decision === 'approve' ? 'approved' : 'pending';
-
-  const { data, error: insertError } = await supabase
-    .from('listing_photos')
-    .insert({
+  const { data, error } = await supabase.functions.invoke('moderate-listing-photo', {
+    body: {
+      image_base64: imageBase64,
+      media_type: contentType,
       listing_id: listingId,
-      storage_key: storageKey,
       sort_order: sortOrder,
-      moderation_status: moderationStatus,
       photo_type: photoType,
-    })
-    .select('id, storage_key, sort_order')
-    .single();
+    },
+  });
 
-  if (insertError) {
-    // Best-effort cleanup — an orphaned storage object is harmless (it's
-    // just never linked/shown), so a failure here doesn't need to surface.
-    await supabase.storage.from(PHOTO_BUCKET).remove([storageKey]).catch(() => {});
-    throw insertError;
+  if (error) {
+    // Non-2xx arrives as FunctionsHttpError with our JSON body attached; that
+    // message is written for the seller (the content-guidelines wording, or a
+    // read failure), so prefer it over a generic.
+    const response = (error as { context?: Response }).context;
+    let message: string | null = null;
+    try {
+      const body = await response?.json();
+      if (body?.error) message = body.error as string;
+    } catch {
+      // No JSON body — failed below the function (gateway/network).
+    }
+    throw new Error(
+      message ??
+        (response?.status === 404
+          ? "Photo upload isn't available right now — the moderate-listing-photo function isn't deployed."
+          : 'That photo could not be added. Please try again.')
+    );
   }
+  if (data?.error) throw new Error(data.error as string);
 
+  const photo = data.photo as { id: string; storage_key: string; sort_order: number };
   return {
-    id: data.id,
-    storageKey: data.storage_key,
-    url: getListingPhotoUrl(data.storage_key),
-    sortOrder: data.sort_order,
+    id: photo.id,
+    storageKey: photo.storage_key,
+    url: getListingPhotoUrl(photo.storage_key),
+    sortOrder: photo.sort_order,
   };
 }
 

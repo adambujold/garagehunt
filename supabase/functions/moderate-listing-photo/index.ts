@@ -3,21 +3,34 @@
 // for AI-assisted listing descriptions (suggest-listing-copy), via Claude's
 // vision capability, with a distinct moderation-classification prompt.
 //
-// Called from utils/listing-photos.ts's uploadListingPhoto, BEFORE the
-// photo is uploaded to Storage — a rejected photo never gets stored at all.
+// THIS FUNCTION NOW OWNS THE WHOLE OPERATION — moderate, store, and record.
 //
-// Three-way decision, not a boolean:
-//   "reject" — clearly inappropriate content. Caller blocks the upload with
-//               a clear error.
-//   "flag"   — borderline/uncertain. Caller uploads the photo anyway but
-//               sets listing_photos.moderation_status = 'pending' (the
-//               schema's existing default) for manual review, rather than
-//               auto-rejecting a false positive.
-//   "approve"— normal photo. Caller sets moderation_status = 'approved'.
-// If the Anthropic call itself fails or returns something unparseable,
-// this returns "flag" (not an error) — a seller shouldn't be blocked from
-// listing because of an infra hiccup, but an unclassified photo still gets
-// a human's eyes on it rather than silently auto-approving.
+// It used to classify a photo and hand the verdict back for the client to
+// apply: uploadListingPhoto called this, then uploaded to Storage itself, then
+// INSERTed the listing_photos row with whatever moderation_status it felt like.
+// Every part of that was advisory. A seller could skip this call entirely and
+// insert a row with moderation_status='approved', putting unscreened images on
+// a public page — and because publish-listing's photo gate just checks that
+// every photo is 'approved', that also walked straight through the listing
+// gate. Exactly the hole 0041 closed for listing text, one level down.
+//
+// So the decision and the write are now a single server-side operation the
+// client cannot get between. This function authenticates the caller, checks
+// they own the listing, classifies the image, uploads the bytes to Storage
+// with service-role credentials, and inserts the listing_photos row with the
+// verdict it computed. 0042_server_side_photo_moderation.sql removes the
+// client's INSERT on both listing_photos and the bucket, so this is the only
+// way a photo row can come into existence.
+//
+// Three-way decision, unchanged in meaning:
+//   "reject" — clearly inappropriate. Nothing is stored and nothing is
+//              recorded; the seller gets a clear error.
+//   "flag"   — borderline/uncertain. Stored and recorded as 'pending' for
+//              manual review, rather than auto-rejecting a false positive.
+//   "approve"— normal photo. Stored and recorded as 'approved'.
+// An Anthropic failure or unparseable reply still yields "flag", never an
+// error — a seller shouldn't be blocked by an infra hiccup, but an
+// unclassified photo still gets a human's eyes rather than auto-approval.
 //
 // HOW TO DEPLOY: Supabase Dashboard → Edge Functions → "Deploy a new
 // function" → name it exactly `moderate-listing-photo` → paste this file's
@@ -44,10 +57,25 @@ const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
 
 type Decision = 'approve' | 'flag' | 'reject';
 
+const PHOTO_BUCKET = 'listing-photos';
+
 type RequestBody = {
   image_base64: string;
   media_type: string;
+  // Added when this function took over storing and recording the photo. The
+  // client no longer picks the storage key either — see randomStorageKey.
+  listing_id: string;
+  sort_order?: number;
+  photo_type?: 'planning' | 'day_of';
 };
+
+// Path shape is "<listing_id>/<random>", which the bucket's RLS policies were
+// written around (0005). Generated here rather than accepted from the request
+// so a caller can't aim a write at another listing's folder.
+function randomStorageKey(listingId: string, mediaType: string): string {
+  const ext = mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'jpg';
+  return `${listingId}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}.${ext}`;
+}
 
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -91,6 +119,24 @@ Deno.serve(async (req) => {
 
   if (!body.image_base64 || !body.media_type) {
     return jsonResponse({ error: 'Missing image_base64/media_type.' }, 400);
+  }
+  if (!body.listing_id) {
+    return jsonResponse({ error: 'Missing listing_id.' }, 400);
+  }
+
+  // Ownership, checked before spending anything on Anthropic. Uses the service
+  // role because this function is about to write columns the caller can't, and
+  // reads sale_listings_raw so a fuzzed view row can't confuse the comparison.
+  const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+  const { data: listing, error: listingError } = await admin
+    .from('sale_listings_raw')
+    .select('id, seller_id')
+    .eq('id', body.listing_id)
+    .maybeSingle();
+  if (listingError) return jsonResponse({ error: listingError.message }, 500);
+  // Same 404 for "missing" and "not yours", so listing ids can't be probed.
+  if (!listing || listing.seller_id !== user.id) {
+    return jsonResponse({ error: 'Listing not found.' }, 404);
   }
 
   const anthropicKey = Deno.env.get('ANTHROPIC_API_KEY');
@@ -189,5 +235,59 @@ Deno.serve(async (req) => {
     console.error('Photo moderation call failed, defaulting to flag', err);
   }
 
-  return jsonResponse({ decision }, 200);
+  // A rejected photo is never stored and never recorded — same as before,
+  // except the client no longer has the option of storing it anyway.
+  if (decision === 'reject') {
+    return jsonResponse(
+      { error: "That photo doesn't meet our content guidelines. Please choose a different photo." },
+      400
+    );
+  }
+
+  // Decode once for the upload. The bytes stored are the exact bytes just
+  // classified — the client never gets a second chance to substitute a
+  // different image against an approved verdict.
+  let bytes: Uint8Array;
+  try {
+    const binary = atob(body.image_base64);
+    bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  } catch {
+    return jsonResponse({ error: 'That photo could not be read. Please try again.' }, 400);
+  }
+  // Same guard both upload paths already had: a "successful" read that yields
+  // a tiny file means the decode silently failed, and storing it would leave a
+  // photo that renders as a stretched colour block.
+  if (bytes.byteLength < 1000) {
+    return jsonResponse({ error: 'That photo could not be read. Please try again.' }, 400);
+  }
+
+  const storageKey = randomStorageKey(body.listing_id, body.media_type);
+  const { error: uploadError } = await admin.storage
+    .from(PHOTO_BUCKET)
+    .upload(storageKey, bytes, { contentType: body.media_type });
+  if (uploadError) return jsonResponse({ error: uploadError.message }, 500);
+
+  const moderationStatus = decision === 'approve' ? 'approved' : 'pending';
+
+  const { data: row, error: insertError } = await admin
+    .from('listing_photos')
+    .insert({
+      listing_id: body.listing_id,
+      storage_key: storageKey,
+      sort_order: typeof body.sort_order === 'number' ? body.sort_order : 0,
+      moderation_status: moderationStatus,
+      photo_type: body.photo_type === 'day_of' ? 'day_of' : 'planning',
+    })
+    .select('id, storage_key, sort_order, moderation_status, photo_type')
+    .single();
+
+  if (insertError) {
+    // Best-effort cleanup — an unreferenced object is invisible and harmless,
+    // so a failure here doesn't need surfacing.
+    await admin.storage.from(PHOTO_BUCKET).remove([storageKey]).catch(() => {});
+    return jsonResponse({ error: insertError.message }, 500);
+  }
+
+  return jsonResponse({ decision, photo: row }, 200);
 });
