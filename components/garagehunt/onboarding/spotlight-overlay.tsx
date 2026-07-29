@@ -65,7 +65,13 @@ export function SpotlightOverlay({
             styles.bubble,
             bubbleBelow
               ? { top: Math.min(cy + radius + 16, screenHeight - 180) }
-              : { top: Math.max(cy - radius - 16 - 140, 16) },
+              : // Anchor the bubble's BOTTOM edge just above the cutout rather
+                // than computing a top from an assumed height. The old version
+                // subtracted a hardcoded 140px "bubble height", so any bubble
+                // shorter than that floated well above its target — most
+                // visible on the bottom-tab steps, where it detached from the
+                // tabs it was pointing at.
+                { bottom: Math.max(screenHeight - (cy - radius - 16), 16) },
           ]}>
           <Text style={styles.stepLabel}>
             {stepNumber} of {stepCount}

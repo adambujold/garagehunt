@@ -4,6 +4,7 @@ import { ConceptCardOverlay } from '@/components/garagehunt/onboarding/concept-c
 import { SpotlightOverlay } from '@/components/garagehunt/onboarding/spotlight-overlay';
 import { useSpotlightRegistry } from '@/contexts/spotlight-registry';
 import { fetchHasCompletedOnboarding, markOnboardingCompleted } from '@/utils/onboarding';
+import { currentUserNeedsTermsAcceptance } from '@/utils/terms-acceptance';
 
 // Part A step order per feature spec Section 2 — target ids match the
 // useSpotlightTarget calls wired into (tabs)/_layout.tsx, discover-map.tsx,
@@ -62,7 +63,29 @@ export function OnboardingTour({ userId, ready }: { userId: string; ready: boole
   useEffect(() => {
     if (!ready || status !== 'checking') return;
     let cancelled = false;
-    fetchHasCompletedOnboarding(userId)
+
+    // The tour renders in a Modal, which on Android sits above the Terms of
+    // Service prompt that fires right after sign-in. A brand-new user got the
+    // terms dialog dimmed underneath the tour overlay and simply could not
+    // accept — the one thing they must do before using anything. So the tour
+    // waits until terms are settled, polling because acceptance happens in a
+    // different component (login/signup) with no shared state to subscribe to.
+    // Poll rather than check once: the prompt can still be open on the first
+    // pass, and a single check would let the tour start the moment it lost.
+    const startWhenTermsSettled = async () => {
+      const stillNeedsTerms = await currentUserNeedsTermsAcceptance().catch(() => null);
+      if (cancelled) return;
+      if (stillNeedsTerms) {
+        setTimeout(() => {
+          if (!cancelled) void startWhenTermsSettled();
+        }, 600);
+        return;
+      }
+      void beginTourCheck();
+    };
+
+    const beginTourCheck = () =>
+      fetchHasCompletedOnboarding(userId)
       .then((completed) => {
         if (cancelled || completed) {
           if (!cancelled) setStatus('hidden');
@@ -89,6 +112,8 @@ export function OnboardingTour({ userId, ready }: { userId: string; ready: boole
         console.error('Failed to check has_completed_onboarding', err);
         if (!cancelled) setStatus('hidden');
       });
+
+    void startWhenTermsSettled();
     return () => {
       cancelled = true;
     };

@@ -74,6 +74,13 @@ const styles = StyleSheet.create({
     position: 'relative',
     alignSelf: 'flex-start',
     marginTop: 6,
+    // Never let a tag be squeezed narrower than its text. Its row is
+    // flexWrap:'wrap', so without this a long label ("💸 Cash + e-Transfer")
+    // got compressed to fit the remaining width and clipped mid-word —
+    // rendering as "💸 Cash +" on a card whose thumbnail left little room.
+    // With shrink off, the tag keeps its natural width and wraps to the next
+    // line instead, which is what the wrapping row was there for.
+    flexShrink: 0,
   },
   tape: {
     position: 'absolute',
