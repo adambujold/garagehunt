@@ -45,7 +45,18 @@ export function formatSaleDateRange(startDate: string, endDate: string): string 
     return `${WEEKDAY_LABELS[start.getDay()]}–${WEEKDAY_LABELS[end.getDay()]}, ${MONTH_LABELS[start.getMonth()]} ${start.getDate()}–${end.getDate()}`;
   }
 
-  return `${WEEKDAY_LABELS[start.getDay()]} ${MONTH_LABELS[start.getMonth()]} ${start.getDate()} – ${WEEKDAY_LABELS[end.getDay()]} ${MONTH_LABELS[end.getMonth()]} ${end.getDate()}`;
+  // Include the year when the range crosses one, or the label reads as
+  // nonsense: a sale running Jul 19 2026 → Jul 11 2027 rendered as
+  // "Sun Jul 19 – Sun Jul 11", which looks like the end date precedes the
+  // start. Same-year ranges stay year-less, which is the common case.
+  const crossesYear = start.getFullYear() !== end.getFullYear();
+  const startLabel = `${WEEKDAY_LABELS[start.getDay()]} ${MONTH_LABELS[start.getMonth()]} ${start.getDate()}${
+    crossesYear ? `, ${start.getFullYear()}` : ''
+  }`;
+  const endLabel = `${WEEKDAY_LABELS[end.getDay()]} ${MONTH_LABELS[end.getMonth()]} ${end.getDate()}${
+    crossesYear ? `, ${end.getFullYear()}` : ''
+  }`;
+  return `${startLabel} – ${endLabel}`;
 }
 
 export function formatSaleSchedule(schedule: SaleSchedule): string {
