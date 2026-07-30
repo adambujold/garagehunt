@@ -5,6 +5,7 @@ import {
   Alert,
   Keyboard,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -85,6 +86,33 @@ export function LoginScreen({ onNavigateToSignUp }: { onNavigateToSignUp: () => 
         { cancelable: false }
       );
     });
+  };
+
+  // "Forgot password?" previously had no handler at all, and no password
+  // recovery existed anywhere in the codebase — anyone who forgot theirs was
+  // permanently locked out with no self-serve way back in.
+  //
+  // Deliberately hands off to the website rather than handling recovery
+  // in-app: the reset email is very often opened on a different device from
+  // the one the app is installed on, and a garagehunt.ca link works from any
+  // of them. The website's /forgot-password sends the email and
+  // /reset-password sets the new one; the seller then signs in here normally.
+  const handleForgotPassword = () => {
+    Alert.alert(
+      'Reset your password',
+      "We'll open garagehunt.ca where you can enter your email and get a reset link.",
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue',
+          onPress: () => {
+            Linking.openURL('https://garagehunt.ca/forgot-password').catch((err) =>
+              console.error('Failed to open password reset', err)
+            );
+          },
+        },
+      ]
+    );
   };
 
   const handleGoogleSignIn = async () => {
@@ -192,7 +220,7 @@ export function LoginScreen({ onNavigateToSignUp }: { onNavigateToSignUp: () => 
           />
         </View>
 
-        <Pressable style={styles.forgotPassword}>
+        <Pressable style={styles.forgotPassword} onPress={handleForgotPassword}>
           <Text style={styles.forgotPasswordLabel}>Forgot password?</Text>
         </Pressable>
 
