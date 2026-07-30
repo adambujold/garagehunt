@@ -1,5 +1,5 @@
 import { Modal, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Svg, { Circle, Defs, Mask, Rect } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { Colors, Fonts } from '@/constants/brand';
 import { SpotlightRect } from '@/contexts/spotlight-registry';
@@ -43,19 +43,23 @@ export function SpotlightOverlay({
     <Modal transparent animationType="fade" visible={visible} statusBarTranslucent onRequestClose={onSkip}>
       <View style={styles.fill}>
         <Svg width={screenWidth} height={screenHeight} style={StyleSheet.absoluteFill}>
-          <Defs>
-            <Mask id="spotlight-mask">
-              <Rect x={0} y={0} width={screenWidth} height={screenHeight} fill="white" />
-              <Circle cx={cx} cy={cy} r={radius} fill="black" />
-            </Mask>
-          </Defs>
-          <Rect
-            x={0}
-            y={0}
-            width={screenWidth}
-            height={screenHeight}
+          {/* One path — the full screen, with the spotlight circle as a second
+              subpath removed by the even-odd fill rule. This replaces an SVG
+              <Mask> whose black circle should have punched a fully transparent
+              hole but rendered as a partially dimmed one on Android:
+              react-native-svg's mask compositing doesn't reliably produce a
+              clean cutout there. Even-odd needs no compositing at all — the
+              circle is simply never filled — so the highlighted element shows
+              at full brightness on both platforms. */}
+          <Path
+            d={
+              `M0,0 H${screenWidth} V${screenHeight} H0 Z ` +
+              `M${cx - radius},${cy} ` +
+              `a${radius},${radius} 0 1,0 ${radius * 2},0 ` +
+              `a${radius},${radius} 0 1,0 ${-radius * 2},0 Z`
+            }
             fill="rgba(26, 16, 48, 0.82)"
-            mask="url(#spotlight-mask)"
+            fillRule="evenodd"
           />
           <Circle cx={cx} cy={cy} r={radius} stroke={Colors.coral} strokeWidth={3} fill="none" />
         </Svg>
