@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MockSale } from '@/components/garagehunt/sale-card';
@@ -158,6 +158,30 @@ export default function SaleDetailScreen() {
       });
     } catch (err) {
       console.error('Failed to open share sheet', err);
+    }
+  };
+
+  // The Directions button previously had no onPress at all — it rendered,
+  // looked tappable, and did nothing, which testers reported as "the
+  // directions map isn't pulling up a map". Mirrors route-planner.tsx's
+  // startNavigation: Apple Maps on iOS, Google Maps' universal directions URL
+  // on Android (which opens the installed app, or the browser as a fallback).
+  //
+  // Uses sale.latitude/longitude straight from the view, which are already
+  // fuzzed for a listing that hasn't revealed yet — so pre-reveal this
+  // navigates to the approximate area and post-reveal to the real address,
+  // which is exactly the address-privacy behaviour the rest of the app has.
+  const handleDirections = async () => {
+    if (!sale) return;
+    const coords = `${sale.latitude},${sale.longitude}`;
+    const url =
+      Platform.OS === 'ios'
+        ? `http://maps.apple.com/?daddr=${coords}&dirflg=d`
+        : `https://www.google.com/maps/dir/?api=1&destination=${coords}`;
+    try {
+      await Linking.openURL(url);
+    } catch (err) {
+      console.error('Failed to open directions', err);
     }
   };
 
@@ -324,7 +348,7 @@ export default function SaleDetailScreen() {
               {isFavorited ? 'Added to route' : 'Add route'}
             </Text>
           </Pressable>
-          <Pressable style={styles.primaryButton}>
+          <Pressable style={styles.primaryButton} onPress={handleDirections}>
             <Ionicons name="navigate" size={14} color="#fff" />
             <Text style={styles.primaryButtonLabel}>Directions</Text>
           </Pressable>
